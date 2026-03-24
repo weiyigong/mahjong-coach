@@ -1,0 +1,95 @@
+/* Global styles for Mahjong Coach PWA */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  background: #0f0f1a;
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: #0f0f1a;
+  color: #e0e0e0;
+  font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont,
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    "Noto Sans CJK SC", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Prevent text selection on tile taps */
+  -webkit-user-select: none;
+  user-select: none;
+  /* Prevent overscroll bounce */
+  overscroll-behavior: none;
+}
+
+/* Allow text selection in specific elements */
+input, textarea, .selectable {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Remove default button styles */
+button {
+  -webkit-appearance: none;
+  appearance: none;
+  font-family: inherit;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.03);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Tile press animation */
+@keyframes tilePress {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.93); }
+  100% { transform: scale(1); }
+}
+
+/* Active tile press feedback */
+div[style*="cursor: pointer"]:active {
+  animation: tilePress 0.1s ease;
+}
+
+/* Pulse animation for tenpai indicator */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* Shimmer for loading states */
+@keyframes shimmer {
+  0% { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+
+/* Safe area support for notched phones */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Prevent zoom on input focus (iOS) */
+@media screen and (-webkit-min-device-pixel-ratio: 0) {
+  select, textarea, input {
+    font-size: 16px;
+  }
+}
