@@ -21,10 +21,6 @@ export function calcStrategy(gameState: GameState): StrategyResult {
   const dangerousOpponents = gameState.opponents.filter(o => o.dangerLevel === 'dangerous');
   const suspiciousOpponents = gameState.opponents.filter(o => o.dangerLevel === 'suspicious');
 
-  const hasDangerousOpponent = dangerousOpponents.length > 0;
-  const hasRiichiOpponent = riichiOpponents.length > 0;
-  const multipleThreats = (dangerousOpponents.length + riichiOpponents.length) >= 2;
-
   // Estimate hand value
   const isDealer = gameState.seatWind === 'east';
   const handValue = estimateHandValue(
@@ -42,12 +38,7 @@ export function calcStrategy(gameState: GameState): StrategyResult {
   // Expected value of winning
   const expectedValue = handValue * winProb;
 
-  // Risk assessment: average danger of tiles we'd need to discard
-  const avgDanger = discards.length > 0
-    ? discards.slice(0, 3).reduce((sum, d) => sum + (100 - d.safetyScore), 0) / Math.min(3, discards.length)
-    : 50;
-
-  // Strategy decision logic
+  // Strategy decision logic — 2-of-3 push/fold framework (RiichiBooks)
   let mode: StrategyMode;
   let explanation: string;
 
@@ -55,51 +46,18 @@ export function calcStrategy(gameState: GameState): StrategyResult {
     // Already in riichi — just wait
     mode = 'attack';
     explanation = '已立直，等待和牌。注意摸牌后是否可以荣和。';
-  } else if (hasRiichiOpponent && currentShanten >= 2) {
-    // High shanten vs riichi = full defense
-    mode = 'defense';
-    explanation = buildDefenseExplanation(dangerousOpponents, riichiOpponents, currentShanten);
-  } else if (hasRiichiOpponent && currentShanten >= 1) {
-    // 1-2 shanten vs riichi = flexible, lean toward defense
-    const safeDiscardExists = discards.some(d => d.safetyScore >= 80);
-    if (safeDiscardExists) {
-      mode = 'flexible';
-      explanation = buildFlexibleExplanation(dangerousOpponents, riichiOpponents, currentShanten, handValue);
-    } else {
-      mode = 'defense';
-      explanation = buildDefenseExplanation(dangerousOpponents, riichiOpponents, currentShanten);
-    }
-  } else if (multipleThreats && currentShanten >= 2) {
-    mode = 'defense';
-    explanation = '多家危險，形势不利，建議防守。';
-  } else if (hasDangerousOpponent && currentShanten >= 3) {
-    mode = 'defense';
-    explanation = buildDefenseExplanation(dangerousOpponents, riichiOpponents, currentShanten);
-  } else if (hasDangerousOpponent && currentShanten <= 1) {
-    // We're close to tenpai but there's danger
-    if (handValue >= 8000) {
-      mode = 'flexible';
-      explanation = `手牌價值高(约${handValue}点)，可考虑靈活應對。`;
-    } else {
-      mode = 'flexible';
-      explanation = buildFlexibleExplanation(dangerousOpponents, riichiOpponents, currentShanten, handValue);
-    }
-  } else if (currentShanten <= 0) {
-    // Tenpai or better
-    mode = 'attack';
-    explanation = buildAttackExplanation(currentShanten, handValue, winProb);
-  } else if (currentShanten === 1) {
-    if (suspiciousOpponents.length > 0) {
-      mode = 'flexible';
-      explanation = buildFlexibleExplanation(dangerousOpponents, suspiciousOpponents, currentShanten, handValue);
-    } else {
-      mode = 'attack';
-      explanation = buildAttackExplanation(currentShanten, handValue, winProb);
-    }
   } else {
-    // High shanten, no major threats
-    mode = 'attack';
-    explanation = buildAttackExplanation(currentShanten, handValue, winProb);
+    const pfResult = evalPushFold(
+      currentShanten,
+      handValue,
+      discards,
+      riichiOpponents,
+      dangerousOpponents,
+      suspiciousOpponents,
+      winProb
+    );
+    mode = pfResult.mode;
+    explanation = pfResult.explanation;
   }
 
   // For defense mode, re-sort discards by safety (not efficiency)
@@ -116,6 +74,133 @@ export function calcStrategy(gameState: GameState): StrategyResult {
     winProbability: winProb,
     expectedValue,
   };
+}
+
+// 2-of-3 push/fold framework (RiichiBooks):
+// PUSH if 2+ of: (A) tenpai, (B) hand value >= 7700, (C) good wait (>=6 effective kinds)
+// FOLD if 2+ of: (A) shanten>=1, (B) hand value <7700, (C) bad wait (<4 at tenpai, <3 pre-tenpai)
+function evalPushFold(
+  currentShanten: number,
+  handValue: number,
+  discards: ReturnType<typeof analyzeDiscards>,
+  riichiOpponents: Opponent[],
+  dangerousOpponents: Opponent[],
+  suspiciousOpponents: Opponent[],
+  winProb: number
+): { mode: StrategyMode; explanation: string } {
+  const hasAnyThreat = dangerousOpponents.length > 0 || riichiOpponents.length > 0;
+  const allThreats = [...riichiOpponents, ...dangerousOpponents];
+
+  // Determine effective kinds from best available discard
+  const bestDiscard = discards[0];
+  const bestTenpaiDiscard = discards.find(d => d.shantenAfter === 0);
+  const effectiveKinds = currentShanten === 0
+    ? (bestDiscard?.effectiveTileTypes ?? 0)
+    : (bestTenpaiDiscard?.effectiveTileTypes ?? bestDiscard?.effectiveTileTypes ?? 0);
+
+  // Push conditions
+  const condPushA = currentShanten === 0;                // (A) tenpai
+  const condPushB = handValue >= 7700;                   // (B) high value
+  const condPushC = effectiveKinds >= 6;                 // (C) good wait
+
+  // Fold conditions
+  const condFoldA = currentShanten >= 1;                 // (A) not tenpai
+  const condFoldB = handValue < 7700;                    // (B) low value
+  const condFoldC = currentShanten === 0                 // (C) bad wait
+    ? effectiveKinds < 4
+    : effectiveKinds < 3;
+
+  const pushScore = [condPushA, condPushB, condPushC].filter(Boolean).length;
+  const foldScore = [condFoldA, condFoldB, condFoldC].filter(Boolean).length;
+
+  // Without active threats: attack unless all 3 fold conditions are met
+  if (!hasAnyThreat) {
+    if (foldScore >= 3) {
+      return {
+        mode: 'defense',
+        explanation: buildDefenseExplanation([], [], currentShanten),
+      };
+    }
+    if (suspiciousOpponents.length > 0 && foldScore >= 2) {
+      return {
+        mode: 'flexible',
+        explanation: buildFlexibleExplanation([], suspiciousOpponents, currentShanten, handValue),
+      };
+    }
+    return {
+      mode: 'attack',
+      explanation: buildAttackExplanation(currentShanten, handValue, winProb),
+    };
+  }
+
+  // With threats: apply 2-of-3 framework
+  if (pushScore >= 2 && foldScore < 2) {
+    return {
+      mode: 'attack',
+      explanation: buildPushExplanation(condPushA, condPushB, condPushC, handValue, effectiveKinds, allThreats),
+    };
+  }
+  if (foldScore >= 2 && pushScore < 2) {
+    return {
+      mode: 'defense',
+      explanation: buildFoldExplanation(condFoldA, condFoldB, condFoldC, allThreats, currentShanten),
+    };
+  }
+
+  // Mixed / tie → flexible
+  return {
+    mode: 'flexible',
+    explanation: buildFlexibleExplanation(
+      dangerousOpponents,
+      [...riichiOpponents, ...suspiciousOpponents],
+      currentShanten,
+      handValue
+    ),
+  };
+}
+
+function buildPushExplanation(
+  condA: boolean,
+  condB: boolean,
+  condC: boolean,
+  handValue: number,
+  effectiveKinds: number,
+  threats: Opponent[]
+): string {
+  const parts: string[] = [];
+  if (condA) parts.push('已聽牌');
+  if (condB) parts.push(`手牌高(约${handValue}点)`);
+  if (condC) parts.push(`等待良好(${effectiveKinds}种)`);
+
+  const threatStr = threats.length > 0
+    ? threats.slice(0, 2).map(o => {
+        const posMap: Record<string, string> = { east: '上家', south: '下家', west: '對家', north: '北家' };
+        return posMap[o.position] || o.position;
+      }).join('、') + '有威脅，'
+    : '';
+
+  return `${parts.join('且')}，${threatStr}進攻價值高，建議繼續進攻！`;
+}
+
+function buildFoldExplanation(
+  condA: boolean,
+  condB: boolean,
+  condC: boolean,
+  threats: Opponent[],
+  shanten: number
+): string {
+  const parts: string[] = [];
+  if (condA) parts.push(`${shanten}向聽`);
+  if (condB) parts.push('手牌價值低');
+  if (condC) parts.push('等待較差');
+
+  const names = threats.slice(0, 2).map(o => {
+    const posMap: Record<string, string> = { east: '上家', south: '下家', west: '對家', north: '北家' };
+    return posMap[o.position] || o.position;
+  }).join('、');
+
+  const threatStr = names ? `${names}威脅，` : '';
+  return `${parts.join('且')}，${threatStr}放铳風險過高，建議打安全牌防守。`;
 }
 
 function estimateWinProbability(shanten: number, turn: number, openMentsuCount: number): number {

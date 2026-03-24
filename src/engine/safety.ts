@@ -37,37 +37,86 @@ function oppIsRiichi(opp: Opponent): boolean {
 }
 
 // Calculate suji safety bonus for a tile against an opponent
-// Returns 0-50 safety bonus
+// Applies timing discount: early discards (turns 1-6) = full bonus,
+// mid-game (turns 7+) = 70%, riichi declaration tile = 0% (suji-trap).
 function calcSujiBonus(tile: Tile, opp: Opponent): { bonus: number; reason: string } {
   if (tile.suit === 'honor') return { bonus: 0, reason: '' };
 
   const sujiGroup = getSujiGroup(tile.value);
   if (sujiGroup.length === 0) return { bonus: 0, reason: '' };
 
-  const oppDiscardValues = opp.discards
-    .filter(d => d.tile.suit === tile.suit)
-    .map(d => d.tile.value);
+  const suitDiscards = opp.discards.filter(d => d.tile.suit === tile.suit);
+  const oppDiscardValues = suitDiscards.map(d => d.tile.value);
 
   // Check how many suji partners have been discarded
   const discardedPartners = sujiGroup.filter(v => v !== tile.value && oppDiscardValues.includes(v));
 
   if (discardedPartners.length === 0) return { bonus: 0, reason: '' };
 
-  // Both flanks discarded → strong suji
+  // Determine raw bonus based on how many flanks are discarded
   const otherMembers = sujiGroup.filter(v => v !== tile.value);
+  let rawBonus: number;
+  let reason: string;
+
   if (otherMembers.every(v => oppDiscardValues.includes(v))) {
-    return { bonus: 40, reason: '双筋' };
+    rawBonus = 40; reason = '双筋';
+  } else if (tile.value === 4 || tile.value === 5 || tile.value === 6) {
+    rawBonus = 25; reason = '筋';
+  } else {
+    rawBonus = 30; reason = '筋';
   }
 
-  // One flank discarded → partial suji
-  // 4 is suji of both 1 and 7; check which scenario applies
-  if (tile.value === 4 || tile.value === 5 || tile.value === 6) {
-    // Middle tiles have two suji partners; at least 1 discarded
-    return { bonus: 25, reason: '筋' };
+  // Apply timing discount based on earliest discarded partner turn
+  let minTurn = Infinity;
+  let isRiichiDeclTile = false;
+
+  for (const partnerVal of discardedPartners) {
+    const partnerDiscard = suitDiscards.find(d => d.tile.value === partnerVal);
+    if (partnerDiscard) {
+      // Riichi declaration tile suji = 0% bonus (suji-trap is common here)
+      if (opp.riichiTurn !== null && partnerDiscard.turn === opp.riichiTurn) {
+        isRiichiDeclTile = true;
+      }
+      minTurn = Math.min(minTurn, partnerDiscard.turn);
+    }
   }
 
-  // Terminal or near-terminal with one suji partner discarded
-  return { bonus: 30, reason: '筋' };
+  if (isRiichiDeclTile) return { bonus: 0, reason: '' };
+
+  // Turns 1-6: full bonus; turns 7+: 70%
+  const multiplier = minTurn <= 6 ? 1.0 : 0.7;
+  return { bonus: Math.round(rawBonus * multiplier), reason };
+}
+
+// One-chance / no-chance safety:
+// If all 4 copies of an adjacent tile are visible, the tile cannot be part of
+// a sequence using that adjacent tile → significant safety boost.
+// If both sides are blocked (or tile is terminal), it's 100% safe for sequences.
+function calcNoChanceBonus(tile: Tile, allVisible: number[]): { bonus: number; reason: string } {
+  if (tile.suit === 'honor') return { bonus: 0, reason: '' };
+
+  const suitOffset = tile.suit === 'man' ? 0 : tile.suit === 'pin' ? 9 : 18;
+
+  const leftValue = tile.value - 1;
+  const rightValue = tile.value + 1;
+
+  const leftExhausted = leftValue >= 1 && allVisible[suitOffset + leftValue - 1] >= 4;
+  const rightExhausted = rightValue <= 9 && allVisible[suitOffset + rightValue - 1] >= 4;
+  const isLeftTerminal = tile.value === 1;  // no sequence to the left
+  const isRightTerminal = tile.value === 9; // no sequence to the right
+
+  const leftSafe = isLeftTerminal || leftExhausted;
+  const rightSafe = isRightTerminal || rightExhausted;
+
+  if (leftSafe && rightSafe) {
+    // Can't be in any sequence from either side → 100% safe for sequences
+    return { bonus: 100, reason: '無筋(完全壁)' };
+  }
+  if (leftExhausted || rightExhausted) {
+    return { bonus: 35, reason: '無筋(片壁)' };
+  }
+
+  return { bonus: 0, reason: '' };
 }
 
 // Calculate kabe safety bonus
@@ -142,6 +191,12 @@ function calcSafetyVsOpponent(
     return { score: 95, label: '現物' };
   }
 
+  // One-chance / no-chance: all 4 copies of adjacent tile visible → can't be in that sequence
+  const { bonus: noChanceBonus, reason: noChanceReason } = calcNoChanceBonus(tile, allVisible);
+  if (noChanceBonus >= 100) {
+    return { score: 95, label: noChanceReason };
+  }
+
   // If opponent is in riichi, use strict suji/kabe reasoning
   if (oppIsRiichi(opp)) {
     // Check suji
@@ -150,14 +205,12 @@ function calcSafetyVsOpponent(
     const seqBonus = calcSequentialDiscardBonus(tile, opp);
 
     const base = baseSafetyByType(tile);
-    const maxBonus = Math.max(sujiBonus, kabeBonus, seqBonus);
+    const maxBonus = Math.max(sujiBonus, kabeBonus, seqBonus, noChanceBonus);
     // Cap non-genbutsu safety at 70% vs riichi opponent
     const score = Math.min(70, base + maxBonus);
-    const label = kabeBonus > sujiBonus
-      ? (kabeReason || (sujiReason || '立直危險'))
-      : (sujiReason || (kabeReason || '立直危險'));
-
-    return { score, label: label || '立直危險' };
+    const topReason = noChanceBonus > 0 ? noChanceReason
+      : kabeBonus > sujiBonus ? kabeReason : sujiReason;
+    return { score, label: topReason || '立直危險' };
   }
 
   // Non-riichi opponent: use general safety heuristics
@@ -174,12 +227,14 @@ function calcSafetyVsOpponent(
     else if (turnNumber >= 12) dangerPenalty = Math.round(dangerPenalty * 1.5);
   }
 
-  const maxBonus = Math.max(sujiBonus, kabeBonus, seqBonus);
+  const maxBonus = Math.max(sujiBonus, kabeBonus, seqBonus, noChanceBonus);
   const score = Math.max(10, Math.min(90, base + maxBonus - dangerPenalty));
 
+  const topReason = noChanceBonus > 0 ? noChanceReason
+    : (sujiReason || kabeReason);
   const label = opp.dangerLevel === 'dangerous'
-    ? `危險(${sujiReason || kabeReason || '注意'})`
-    : (sujiReason || kabeReason || (opp.dangerLevel === 'suspicious' ? '注意' : '較安全'));
+    ? `危險(${topReason || '注意'})`
+    : (topReason || (opp.dangerLevel === 'suspicious' ? '注意' : '較安全'));
 
   return { score, label };
 }

@@ -88,6 +88,7 @@ export function analyzeDiscards(gameState: GameState): DiscardRecommendation[] {
   interface DiscardResult extends DiscardRecommendation {
     handValue: number;
     isDora: boolean;
+    waitQualityBonus: number; // bonus applied to tenpai discard ranking
   }
 
   const results: DiscardResult[] = [];
@@ -134,6 +135,15 @@ export function analyzeDiscards(gameState: GameState): DiscardRecommendation[] {
     // Dora awareness: flag tiles that are dora (should penalize discarding them)
     const isDora = isDoraTile(tile, gameState.doraIndicators);
 
+    // Wait quality bonus: applied when this discard reaches tenpai (shantenAfter=0)
+    // Side wait (>=2 kinds): +20; triple+ wait (>=3 kinds): +30; single/edge/closed (1 kind): -10
+    let waitQualityBonus = 0;
+    if (shantenAfter === 0) {
+      if (effectiveTileTypes >= 3) waitQualityBonus = 30;
+      else if (effectiveTileTypes >= 2) waitQualityBonus = 20;
+      else waitQualityBonus = -10;
+    }
+
     const reason = buildDiscardReason(
       tile,
       shantenAfter,
@@ -154,18 +164,26 @@ export function analyzeDiscards(gameState: GameState): DiscardRecommendation[] {
       rank: 0, // assigned after sorting
       handValue,
       isDora,
+      waitQualityBonus,
     });
 
     baseCounts[idx]++;
   }
 
   // Sort: shanten (lower = better) → dora penalty (non-dora first) →
-  //       effective tile count (higher = better) → hand value (higher = better) →
-  //       safety (higher = better)
+  //       at tenpai (shantenAfter=0): wait-quality-adjusted priority (effectiveTileCount + waitQualityBonus)
+  //       otherwise: effective tile count (higher = better) →
+  //       hand value (higher = better) → safety (higher = better)
   results.sort((a, b) => {
     if (a.shantenAfter !== b.shantenAfter) return a.shantenAfter - b.shantenAfter;
     if (a.isDora !== b.isDora) return a.isDora ? 1 : -1; // non-dora discards rank higher
-    if (b.effectiveTileCount !== a.effectiveTileCount) return b.effectiveTileCount - a.effectiveTileCount;
+    if (a.shantenAfter === 0 && b.shantenAfter === 0) {
+      const prioA = a.effectiveTileCount + a.waitQualityBonus;
+      const prioB = b.effectiveTileCount + b.waitQualityBonus;
+      if (prioA !== prioB) return prioB - prioA;
+    } else {
+      if (b.effectiveTileCount !== a.effectiveTileCount) return b.effectiveTileCount - a.effectiveTileCount;
+    }
     if (b.handValue !== a.handValue) return b.handValue - a.handValue;
     return b.safetyScore - a.safetyScore;
   });

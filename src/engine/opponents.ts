@@ -79,13 +79,29 @@ function calcRiichiDanger(opp: Opponent): number {
 }
 
 // Danger from meld pattern
+// 3+ open melds = likely tenpai; 4 open melds = definitely tenpai
 function calcMeldDanger(opp: Opponent): number {
   if (opp.melds.length === 0) return 0;
-  // Open melds = committed to specific tiles, but easier to see
-  // Many melds close to tenpai = dangerous
-  if (opp.melds.length >= 3) return 25;
+  if (opp.melds.length >= 4) return 30; // definitely tenpai
+  if (opp.melds.length >= 3) return 15; // likely tenpai
   if (opp.melds.length >= 2) return 12;
   return 5;
+}
+
+// Dama (silent tenpai) detection:
+// 3+ consecutive tsumogiri (draw-and-discard) = hand is complete, possibly dama
+function calcDamaDanger(opp: Opponent): number {
+  const discards = opp.discards;
+  if (discards.length < 3) return 0;
+
+  // Count consecutive tsumogiri from the most recent discard backwards
+  let consecutive = 0;
+  for (let i = discards.length - 1; i >= 0; i--) {
+    if (discards[i].isTsumogiri) consecutive++;
+    else break;
+  }
+
+  return consecutive >= 3 ? 20 : 0;
 }
 
 // Honitsu/chinitsu detection: open melds all in one suit + few discards of that suit
@@ -159,6 +175,7 @@ export function calcDangerScore(opp: Opponent): { score: number; level: DangerLe
   score += calcSpeedDanger(opp);
   score += calcMeldDanger(opp);
   score += calcHonitsuDanger(opp);
+  score += calcDamaDanger(opp);
 
   // Clamp 0-100
   score = Math.min(100, Math.max(0, score));
