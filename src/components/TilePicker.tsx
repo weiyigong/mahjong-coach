@@ -164,8 +164,8 @@ export const TilePicker: React.FC = () => {
           </div>
           <div style={{
             display: 'flex',
-            gap: 3,
-            flexWrap: 'wrap',
+            justifyContent: 'space-between',
+            flexWrap: 'nowrap',
           }}>
             {suit.values.map(value => {
               const tile = createTile(suit.key, value);
@@ -196,7 +196,7 @@ export const TilePicker: React.FC = () => {
         }}>
           字牌
         </div>
-        <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 3, flexWrap: 'nowrap' }}>
           {honors.map(({ value }) => {
             const tile = createTile('honor', value);
             const remaining = 4 - visibleCounts[tileToIndex(tile)];

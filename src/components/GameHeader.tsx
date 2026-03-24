@@ -19,6 +19,7 @@ export const GameHeader: React.FC = () => {
     setRoundWind,
     setSeatWind,
     advanceTurn,
+    decrementTurn,
     removeLastDora,
     setPickTarget,
     pickTarget,
@@ -106,8 +107,23 @@ export const GameHeader: React.FC = () => {
         </div>
 
         {/* Turn counter */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>第</span>
+          <button
+            onClick={decrementTurn}
+            style={{
+              background: 'rgba(255,255,255,0.05)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              color: 'rgba(255,255,255,0.5)',
+              borderRadius: 6,
+              padding: '3px 7px',
+              fontSize: 11,
+              cursor: 'pointer',
+              lineHeight: 1,
+            }}
+          >
+            −
+          </button>
           <div
             style={{
               background: 'rgba(255,255,255,0.05)',
@@ -117,6 +133,8 @@ export const GameHeader: React.FC = () => {
               padding: '3px 8px',
               fontSize: 13,
               fontWeight: 700,
+              minWidth: 28,
+              textAlign: 'center',
             }}
           >
             {turnNumber}
@@ -129,12 +147,13 @@ export const GameHeader: React.FC = () => {
               border: '1px solid rgba(255,255,255,0.1)',
               color: 'rgba(255,255,255,0.5)',
               borderRadius: 6,
-              padding: '3px 8px',
+              padding: '3px 7px',
               fontSize: 11,
               cursor: 'pointer',
+              lineHeight: 1,
             }}
           >
-            +1
+            +
           </button>
         </div>
       </div>

@@ -8,6 +8,8 @@
 html {
   background: #0f0f1a;
   color-scheme: dark;
+  /* Account for sticky header when scrolling to anchors */
+  scroll-padding-top: 62px;
 }
 
 body {

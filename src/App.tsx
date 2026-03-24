@@ -30,6 +30,11 @@ export const App: React.FC = () => {
     return calcStrategy(gameState);
   }, [gameState]);
 
+  const handleTabChange = (tabId: TabId) => {
+    setActiveTab(tabId);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  };
+
   const handleTileClick = (tile: Tile) => {
     setSelectedTileId(prev => prev === tile.id ? null : tile.id);
   };
@@ -183,7 +188,7 @@ export const App: React.FC = () => {
         {TAB_CONFIG.map(tab => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => handleTabChange(tab.id)}
             style={{
               flex: 1,
               padding: '10px 4px 12px',

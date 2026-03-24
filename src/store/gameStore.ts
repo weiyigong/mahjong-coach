@@ -39,6 +39,7 @@ interface GameStore extends GameState {
   setRoundWind: (wind: Wind) => void;
   setSeatWind: (wind: Wind) => void;
   advanceTurn: () => void;
+  decrementTurn: () => void;
   declareRiichi: () => void;
   declareMeld: (meld: Meld) => void;
   declareOpponentRiichi: (position: Wind) => void;
@@ -58,7 +59,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const total = state.myHand.length + (state.lastDrawnTile ? 1 : 0) + state.myMelds.length * 3;
       if (total >= 14) return state; // hand full
       const newHand = sortTiles([...state.myHand, newTile]);
-      return { myHand: newHand };
+      // Auto-advance turn when drawing the 14th tile (represents your draw action)
+      const newTurnNumber = total === 13 ? state.turnNumber + 1 : state.turnNumber;
+      return { myHand: newHand, turnNumber: newTurnNumber };
     }),
 
   removeTileFromHand: (tileId) =>
@@ -159,6 +162,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   }),
 
   advanceTurn: () => set(state => ({ turnNumber: state.turnNumber + 1 })),
+  decrementTurn: () => set(state => ({ turnNumber: Math.max(1, state.turnNumber - 1) })),
 
   declareRiichi: () =>
     set(state => ({
