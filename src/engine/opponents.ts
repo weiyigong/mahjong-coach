@@ -74,7 +74,7 @@ function calcSpeedDanger(opp: Opponent): number {
 
 // Danger from riichi
 function calcRiichiDanger(opp: Opponent): number {
-  if (opp.riichiTurn !== null) return 50;
+  if (opp.riichiTurn !== null) return 60;
   return 0;
 }
 
