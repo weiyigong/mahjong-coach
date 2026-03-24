@@ -1,6 +1,6 @@
-import type { GameState, StrategyResult, StrategyMode, Opponent } from '../types';
-import { tilesToCounts } from './tiles';
-import { calcShanten } from './shanten';
+import type { GameState, StrategyResult, StrategyMode, Opponent, DiscardRecommendation } from '../types';
+import { tilesToCounts, tileToIndex, tileDisplayName } from './tiles';
+import { calcShanten, calcNormalShanten, calcChitoiShanten } from './shanten';
 import { analyzeDiscards } from './efficiency';
 import { estimateHandValue } from './handValue';
 import { computePlacements } from '../store/gameStore';
@@ -67,6 +67,31 @@ export function calcStrategy(gameState: GameState): StrategyResult {
   if (mode === 'defense') {
     sortedDiscards = sortedDiscards.sort((a, b) => b.safetyScore - a.safetyScore);
     sortedDiscards.forEach((d, i) => { d.rank = i + 1; });
+  }
+
+  // Abandonment check: 七対子 transition and 型聽 pursuit
+  const abandonOpts = checkAbandonmentOptions(gameState);
+
+  // Override defense → abandon if chiitoi transition is viable
+  if (mode === 'defense' && abandonOpts.shouldSwitchToAbandon) {
+    mode = 'abandon';
+    explanation = abandonOpts.explanation + '。' + explanation;
+  }
+
+  // 型聽 pursuit note for late rounds (shanten <= 1, S3/S4, turn >= 12)
+  if (abandonOpts.tenpaiPursuitAdvice) {
+    explanation = abandonOpts.tenpaiPursuitAdvice + explanation;
+  }
+
+  // Last-resort 聽牌料 note: deep in shanten in the final round
+  const isLastRoundFinal = gameState.currentRound === 'S3' || gameState.currentRound === 'S4';
+  if (gameState.turnNumber >= 14 && currentShanten >= 3 && isLastRoundFinal) {
+    explanation = '殘局注意：即使聽牌難度大，仍建議朝聽牌方向努力，避免無聽罰分。' + explanation;
+  }
+
+  // For abandon mode (七対子 path), re-rank discards to prefer isolated tiles
+  if (mode === 'abandon' && abandonOpts.chitoiShanten <= 2) {
+    sortedDiscards = reRankDiscardForChiitoi(sortedDiscards, counts);
   }
 
   // Placement-awareness: evaluate whether winning would improve placement
@@ -313,12 +338,86 @@ function buildDefenseExplanation(
   return `${names}${reason}，形势危險。${shanten >= 2 ? '放铳風險过高，' : ''}建議打最安全的牌防守。`;
 }
 
+// Evaluate abandonment / transition options
+interface AbandonmentCheck {
+  shouldSwitchToAbandon: boolean;
+  chitoiShanten: number;
+  normalShanten: number;
+  pairCount: number;
+  explanation: string;
+  tenpaiPursuitAdvice: string;
+}
+
+function checkAbandonmentOptions(gameState: GameState): AbandonmentCheck {
+  const hand = [...gameState.myHand];
+  if (gameState.lastDrawnTile) hand.push(gameState.lastDrawnTile);
+  const openMentsuCount = gameState.myMelds.length;
+  const counts = tilesToCounts(hand);
+
+  const normalShanten = calcNormalShanten(counts, openMentsuCount);
+  const chitoiShanten = openMentsuCount === 0 ? calcChitoiShanten(counts) : 99;
+  const currentShanten = Math.min(normalShanten, chitoiShanten);
+
+  let pairCount = 0;
+  for (let i = 0; i < 34; i++) {
+    if (counts[i] >= 2) pairCount++;
+  }
+
+  let explanation = '';
+  let shouldSwitchToAbandon = false;
+
+  // a. 七対子 transition: chiitoi is at least as good as normal AND within reach
+  if (chitoiShanten <= normalShanten && chitoiShanten <= 2) {
+    explanation = `配弃：七対子轉換可行（${chitoiShanten}向聽），建議保留對子打單張`;
+    shouldSwitchToAbandon = true;
+  }
+
+  // b. 型聽 pursuit: S3/S4, shanten <= 1, turn >= 12 — noten penalty matters
+  let tenpaiPursuitAdvice = '';
+  const isLastRounds = gameState.currentRound === 'S3' || gameState.currentRound === 'S4';
+  if (isLastRounds && gameState.turnNumber >= 12 && currentShanten <= 1) {
+    tenpaiPursuitAdvice = `終局倒數，距聽牌僅${currentShanten + 1}步，優先追求聽牌料（各無聽家-1000罰分）。`;
+  }
+
+  // c. Full fold with pair hoarding: 4+ pairs, note chiitoi as backup
+  if (pairCount >= 4 && chitoiShanten <= 3 && !shouldSwitchToAbandon) {
+    explanation = `手中已有${pairCount}對，七対子（${chitoiShanten}向聽）可作防守備案。`;
+  }
+
+  return { shouldSwitchToAbandon, chitoiShanten, normalShanten, pairCount, explanation, tenpaiPursuitAdvice };
+}
+
+// Re-rank discards for 七対子 path: prefer discarding isolated tiles over pairs
+function reRankDiscardForChiitoi(
+  discards: DiscardRecommendation[],
+  counts: number[]
+): DiscardRecommendation[] {
+  const sorted = [...discards].sort((a, b) => {
+    const aIsolated = counts[tileToIndex(a.tile)] < 2;
+    const bIsolated = counts[tileToIndex(b.tile)] < 2;
+    // Isolated tiles (non-pairs) should be discarded first
+    if (aIsolated !== bIsolated) return aIsolated ? -1 : 1;
+    // Among same category, prefer safer tiles
+    return b.safetyScore - a.safetyScore;
+  });
+
+  sorted.forEach((d, i) => {
+    d.rank = i + 1;
+    if (counts[tileToIndex(d.tile)] < 2) {
+      d.reason = `七対子路線：保留對子，優先打出單張${tileDisplayName(d.tile)}`;
+    }
+  });
+
+  return sorted;
+}
+
 // Strategy mode labels and colors
 export function strategyLabel(mode: StrategyMode): string {
   switch (mode) {
     case 'attack': return '全力進攻';
     case 'flexible': return '靈活應對';
     case 'defense': return '完全防守';
+    case 'abandon': return '配弃轉換';
   }
 }
 
@@ -327,6 +426,7 @@ export function strategyEmoji(mode: StrategyMode): string {
     case 'attack': return '🟢';
     case 'flexible': return '🟡';
     case 'defense': return '🔴';
+    case 'abandon': return '🔄';
   }
 }
 
@@ -335,5 +435,6 @@ export function strategyColor(mode: StrategyMode): string {
     case 'attack': return '#00b894';
     case 'flexible': return '#fdcb6e';
     case 'defense': return '#e17055';
+    case 'abandon': return '#a29bfe';
   }
 }

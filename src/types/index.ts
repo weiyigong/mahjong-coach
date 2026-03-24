@@ -2,7 +2,7 @@ export type Suit = 'man' | 'pin' | 'sou' | 'honor';
 export type Wind = 'east' | 'south' | 'west' | 'north';
 export type MeldType = 'chi' | 'pon' | 'kan' | 'closedKan';
 export type DangerLevel = 'normal' | 'suspicious' | 'dangerous';
-export type StrategyMode = 'attack' | 'flexible' | 'defense';
+export type StrategyMode = 'attack' | 'flexible' | 'defense' | 'abandon';
 export type PickTarget = 'hand' | 'east' | 'south' | 'west' | 'north' | 'dora' | 'myDiscard';
 
 export interface Tile {
