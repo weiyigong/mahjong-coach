@@ -45,6 +45,8 @@ export interface GameState {
   opponents: Opponent[];
   pickTarget: PickTarget;
   lastDrawnTile: Tile | null;
+  scores: [number, number, number, number]; // [self, south, west, north]
+  currentRound: string; // E1-E4, S1-S4
 }
 
 export interface DiscardRecommendation {

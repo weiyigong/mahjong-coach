@@ -3,6 +3,12 @@ import type { GameState, Tile, Wind, Meld, DiscardInfo, PickTarget } from '../ty
 import { createTile, sortTiles, windToHonorValue } from '../engine/tiles';
 import { calcDangerScore } from '../engine/opponents';
 
+const ROUNDS = ['E1', 'E2', 'E3', 'E4', 'S1', 'S2', 'S3', 'S4'];
+
+export function computePlacements(scores: [number, number, number, number]): [number, number, number, number] {
+  return scores.map(s => scores.filter(other => other > s).length + 1) as [number, number, number, number];
+}
+
 function makeInitialState(): GameState {
   return {
     roundWind: 'east',
@@ -21,6 +27,8 @@ function makeInitialState(): GameState {
       { position: 'north', discards: [], melds: [], riichiTurn: null, dangerLevel: 'normal', dangerScore: 0 },
     ],
     pickTarget: 'hand',
+    scores: [25000, 25000, 25000, 25000],
+    currentRound: 'E1',
   };
 }
 
@@ -46,6 +54,11 @@ interface GameStore extends GameState {
   declareOpponentMeld: (position: Wind, meld: Meld) => void;
   resetGame: () => void;
   resetHand: () => void;
+  updateScore: (playerIndex: number, delta: number) => void;
+  setScores: (scores: [number, number, number, number]) => void;
+  advanceRound: () => void;
+  setRound: (round: string) => void;
+  getPlacement: () => [number, number, number, number];
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -196,6 +209,26 @@ export const useGameStore = create<GameStore>((set, get) => ({
       });
       return { opponents: newOpponents };
     }),
+
+  updateScore: (playerIndex, delta) =>
+    set(state => {
+      const newScores = [...state.scores] as [number, number, number, number];
+      newScores[playerIndex] = newScores[playerIndex] + delta;
+      return { scores: newScores };
+    }),
+
+  setScores: (scores) => set({ scores }),
+
+  advanceRound: () =>
+    set(state => {
+      const idx = ROUNDS.indexOf(state.currentRound);
+      const next = ROUNDS[Math.min(idx + 1, ROUNDS.length - 1)];
+      return { currentRound: next };
+    }),
+
+  setRound: (round) => set({ currentRound: round }),
+
+  getPlacement: () => computePlacements(get().scores),
 
   resetGame: () => set(makeInitialState()),
 

@@ -3,6 +3,7 @@ import { tilesToCounts } from './tiles';
 import { calcShanten } from './shanten';
 import { analyzeDiscards } from './efficiency';
 import { estimateHandValue } from './handValue';
+import { computePlacements } from '../store/gameStore';
 
 // Main strategy engine: decides between attack, flexible, defense
 export function calcStrategy(gameState: GameState): StrategyResult {
@@ -65,6 +66,22 @@ export function calcStrategy(gameState: GameState): StrategyResult {
   if (mode === 'defense') {
     sortedDiscards = sortedDiscards.sort((a, b) => b.safetyScore - a.safetyScore);
     sortedDiscards.forEach((d, i) => { d.rank = i + 1; });
+  }
+
+  // Placement-awareness for final rounds
+  const isLastRounds = gameState.currentRound === 'S3' || gameState.currentRound === 'S4';
+  if (isLastRounds) {
+    const placements = computePlacements(gameState.scores);
+    const myPlacement = placements[0];
+    let placementNote: string;
+    if (myPlacement === 1) {
+      placementNote = `目前第1位，注意防守保持領先。`;
+    } else if (myPlacement >= 3) {
+      placementNote = `最終局，目前第${myPlacement}位，需要進攻追分。`;
+    } else {
+      placementNote = `目前第2位，保持穩定爭取1位。`;
+    }
+    explanation = placementNote + explanation;
   }
 
   return {
