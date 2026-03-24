@@ -1,8 +1,10 @@
-import React, { useMemo } from 'react';
-import type { Tile, PickTarget } from '../types';
+import React, { useMemo, useState } from 'react';
+import type { Tile, PickTarget, Wind } from '../types';
 import { ALL_TILE_TYPES, createTile, tileToIndex } from '../engine/tiles';
 import { TileComponent } from './TileComponent';
 import { useGameStore } from '../store/gameStore';
+import { tilesToCounts } from '../engine/tiles';
+import { calcShanten } from '../engine/shanten';
 
 const TARGET_LABELS: Record<PickTarget, string> = {
   hand: '我的手牌',
@@ -39,7 +41,17 @@ export const TilePicker: React.FC = () => {
     setDrawnTile,
     addTileToOpponentDiscard,
     addDoraIndicator,
+    setWinningTileAppeared,
   } = useGameStore();
+
+  const [winningTileMode, setWinningTileMode] = useState(false);
+  const [winningTileOpponent, setWinningTileOpponent] = useState<Wind | null>(null);
+
+  // Check if at tenpai (shanten = 0)
+  const isAtTenpai = useMemo(() => {
+    const counts = tilesToCounts(myHand);
+    return calcShanten(counts, myMelds.length) === 0;
+  }, [myHand, myMelds]);
 
   // Count all visible tiles to show remaining counts
   const visibleCounts = useMemo(() => {
@@ -60,6 +72,14 @@ export const TilePicker: React.FC = () => {
     const idx = tileToIndex(createTile(suit, value));
     const remaining = 4 - visibleCounts[idx];
     if (remaining <= 0) return; // no tiles left
+
+    // Winning tile mode: set winning tile and open advisor
+    if (winningTileMode) {
+      setWinningTileAppeared(createTile(suit, value), winningTileOpponent);
+      setWinningTileMode(false);
+      setWinningTileOpponent(null);
+      return;
+    }
 
     switch (pickTarget) {
       case 'hand':
@@ -139,7 +159,126 @@ export const TilePicker: React.FC = () => {
         ))}
       </div>
 
+      {/* 和了牌出現 button (shown when at tenpai) */}
+      {isAtTenpai && !winningTileMode && (
+        <div style={{ marginBottom: 8, textAlign: 'center' }}>
+          <button
+            onClick={() => {
+              setWinningTileMode(true);
+              setWinningTileOpponent(null);
+            }}
+            style={{
+              padding: '6px 14px',
+              borderRadius: 8,
+              border: '1.5px solid #fdcb6e80',
+              background: '#fdcb6e18',
+              color: '#fdcb6e',
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer',
+              letterSpacing: 0.3,
+            }}
+          >
+            和了牌出現 — 分析榮和/見逃
+          </button>
+        </div>
+      )}
+
+      {/* Winning tile flow: opponent selector + tile pick prompt */}
+      {winningTileMode && (
+        <div style={{
+          marginBottom: 10,
+          padding: '10px 8px',
+          background: '#fdcb6e12',
+          border: '1.5px solid #fdcb6e50',
+          borderRadius: 10,
+        }}>
+          <div style={{
+            fontSize: 12,
+            color: '#fdcb6e',
+            fontWeight: 700,
+            marginBottom: 6,
+            textAlign: 'center',
+          }}>
+            {winningTileOpponent === null
+              ? '選擇哪家棄牌為和了牌'
+              : '點擊下方和了牌'}
+          </div>
+          {winningTileOpponent === null ? (
+            <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap' }}>
+              {opponents.map(opp => {
+                const labels: Record<string, string> = { east: '東家', south: '南家', west: '西家', north: '北家' };
+                return (
+                  <button
+                    key={opp.position}
+                    onClick={() => setWinningTileOpponent(opp.position)}
+                    style={{
+                      padding: '5px 12px',
+                      borderRadius: 8,
+                      border: '1px solid rgba(253,203,110,0.4)',
+                      background: 'rgba(253,203,110,0.12)',
+                      color: '#fdcb6e',
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                    }}
+                  >
+                    {labels[opp.position] ?? opp.position}
+                  </button>
+                );
+              })}
+              <button
+                onClick={() => { setWinningTileMode(false); setWinningTileOpponent(null); }}
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: 8,
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  background: 'transparent',
+                  color: 'rgba(255,255,255,0.4)',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                }}
+              >
+                取消
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+              <button
+                onClick={() => setWinningTileOpponent(null)}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: 6,
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  background: 'transparent',
+                  color: 'rgba(255,255,255,0.4)',
+                  fontSize: 11,
+                  cursor: 'pointer',
+                }}
+              >
+                ← 返回
+              </button>
+              <button
+                onClick={() => { setWinningTileMode(false); setWinningTileOpponent(null); }}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: 6,
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  background: 'transparent',
+                  color: 'rgba(255,255,255,0.4)',
+                  fontSize: 11,
+                  cursor: 'pointer',
+                }}
+              >
+                取消
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Current target indicator */}
+      {!winningTileMode && (
       <div style={{
         textAlign: 'center',
         marginBottom: 8,
@@ -150,6 +289,7 @@ export const TilePicker: React.FC = () => {
       }}>
         點擊添加到：{TARGET_LABELS[pickTarget]}
       </div>
+      )}
 
       {/* Suited tiles */}
       {suits.map(suit => (

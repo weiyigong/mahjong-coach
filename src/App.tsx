@@ -6,6 +6,7 @@ import { OpponentPanel } from './components/OpponentPanel';
 import { StrategyPanel } from './components/StrategyPanel';
 import { RecommendationList } from './components/RecommendationList';
 import { ChiPonKanAdvisor } from './components/ChiPonKanAdvisor';
+import { RonPassAdvisor } from './components/RonPassAdvisor';
 import { useGameStore } from './store/gameStore';
 import { calcStrategy } from './engine/strategy';
 import type { Tile } from './types';
@@ -51,6 +52,8 @@ export const App: React.FC = () => {
   };
 
   return (
+    <>
+    <RonPassAdvisor />
     <div style={{
       minHeight: '100dvh',
       background: '#0f0f1a',
@@ -215,6 +218,7 @@ export const App: React.FC = () => {
         ))}
       </div>
     </div>
+    </>
   );
 };
 

@@ -1,6 +1,6 @@
-import type { GameState, StrategyResult, StrategyMode, Opponent, DiscardRecommendation } from '../types';
+import type { GameState, StrategyResult, StrategyMode, Opponent, DiscardRecommendation, RonPassAdvice } from '../types';
 import { tilesToCounts, tileToIndex, tileDisplayName } from './tiles';
-import { calcShanten, calcNormalShanten, calcChitoiShanten } from './shanten';
+import { calcShanten, calcNormalShanten, calcChitoiShanten, findEffectiveTiles } from './shanten';
 import { analyzeDiscards } from './efficiency';
 import { estimateHandValue } from './handValue';
 import { computePlacements } from '../store/gameStore';
@@ -409,6 +409,106 @@ function reRankDiscardForChiitoi(
   });
 
   return sorted;
+}
+
+// Evaluate whether to ron or pass (見逃) for tsumo
+export function evaluateRonPass(gameState: GameState): RonPassAdvice {
+  const isDealer = gameState.seatWind === 'east';
+  const scores = gameState.scores ?? [25000, 25000, 25000, 25000];
+
+  const hand = [...gameState.myHand];
+  if (gameState.lastDrawnTile) hand.push(gameState.lastDrawnTile);
+
+  const ronValue = estimateHandValue(
+    hand,
+    gameState.myMelds,
+    gameState.roundWind,
+    gameState.seatWind,
+    gameState.doraIndicators,
+    isDealer
+  );
+
+  // Tsumo gets 門前清自摸 (+1翻) if closed hand (no open non-kan melds)
+  const isClosed = gameState.myMelds.filter(m => m.type !== 'closedKan').length === 0;
+  const tsumoValue = isClosed ? Math.round(ronValue * 1.25) : ronValue;
+
+  // Tiles left in wall: starts at 70, decreases ~4 per turn (4 players each draw)
+  const tilesLeftInWall = Math.max(4, 70 - gameState.turnNumber * 4);
+
+  // Count remaining winning tiles across all visible tiles
+  const handForCalc = [...gameState.myHand];
+  const openMentsuCount = gameState.myMelds.length;
+  const counts = tilesToCounts(handForCalc);
+  const effectiveTileIndices = findEffectiveTiles(counts, openMentsuCount);
+
+  // Build visible tile counts to estimate remaining
+  const allVisible: number[] = new Array(34).fill(0);
+  for (const t of gameState.myHand) allVisible[tileToIndex(t)]++;
+  if (gameState.lastDrawnTile) allVisible[tileToIndex(gameState.lastDrawnTile)]++;
+  for (const t of gameState.myDiscards) allVisible[tileToIndex(t)]++;
+  for (const m of gameState.myMelds) for (const t of m.tiles) allVisible[tileToIndex(t)]++;
+  for (const opp of gameState.opponents) {
+    for (const d of opp.discards) allVisible[tileToIndex(d.tile)]++;
+    for (const m of opp.melds) for (const t of m.tiles) allVisible[tileToIndex(t)]++;
+  }
+
+  let winningTilesRemaining = 0;
+  for (const idx of effectiveTileIndices) {
+    winningTilesRemaining += Math.max(0, 4 - allVisible[idx]);
+  }
+
+  const tsumoProb = Math.min(0.95, winningTilesRemaining / tilesLeftInWall);
+
+  // Placement impact for ron vs tsumo
+  let loserScoreIndex: number | null = null;
+  if (gameState.winningTileFrom) {
+    const loserOppIndex = gameState.opponents.findIndex(o => o.position === gameState.winningTileFrom);
+    if (loserOppIndex >= 0) loserScoreIndex = loserOppIndex + 1;
+  }
+
+  const ronEval = evaluateWinValue(scores, 0, ronValue, loserScoreIndex, isDealer);
+  const tsumoEval = evaluateWinValue(scores, 0, tsumoValue, null, isDealer);
+
+  const dangerousOpponents = gameState.opponents.filter(
+    o => o.dangerLevel === 'dangerous' || o.riichiTurn !== null
+  );
+
+  const ronChangesPlacement = ronEval.placementDelta > 0;
+  const tsumoChangesPlacement = tsumoEval.placementDelta > 0;
+  const expectedValuePassing = tsumoValue * tsumoProb;
+
+  let shouldRon = true;
+  let reason = '';
+
+  if (gameState.turnNumber >= 14) {
+    shouldRon = true;
+    reason = `局末（第${gameState.turnNumber}巡），剩余牌少，立即榮和保穩。`;
+  } else if (dangerousOpponents.length >= 2) {
+    shouldRon = true;
+    reason = `${dangerousOpponents.length}家危險，見逃後放铳風險過高，建議立即榮和。`;
+  } else if (ronChangesPlacement) {
+    shouldRon = true;
+    reason = `榮和可從第${ronEval.placementBefore}位升至第${ronEval.placementAfter}位，立即榮和！`;
+  } else if (tsumoChangesPlacement && !ronChangesPlacement && tsumoProb > 0.15) {
+    shouldRon = false;
+    reason = `摸牌勝可從第${tsumoEval.placementBefore}位升至第${tsumoEval.placementAfter}位，而榮和無法昇位。摸牌概率${Math.round(tsumoProb * 100)}%，建議見逃等摸牌。`;
+  } else if (expectedValuePassing < ronValue) {
+    shouldRon = true;
+    reason = `期望值：榮和${ronValue}点 > 見逃期望${Math.round(expectedValuePassing)}点，建議榮和。`;
+  } else {
+    shouldRon = true;
+    reason = `摸牌概率偏低（${Math.round(tsumoProb * 100)}%），進攻價值高，建議榮和。`;
+  }
+
+  return {
+    shouldRon,
+    ronValue,
+    tsumoValue,
+    ronPlacement: ronEval.placementAfter,
+    tsumoPlacement: tsumoEval.placementAfter,
+    tsumoProb,
+    reason,
+  };
 }
 
 // Strategy mode labels and colors

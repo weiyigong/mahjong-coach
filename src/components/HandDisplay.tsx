@@ -201,6 +201,21 @@ export const HandDisplay: React.FC<HandDisplayProps> = ({ onTileClick, selectedT
         )}
       </div>
 
+      {/* Tenpai hint for ron/pass analysis */}
+      {shanten === 0 && (
+        <div style={{
+          marginTop: 6,
+          fontSize: 10,
+          color: 'rgba(253,203,110,0.6)',
+          padding: '4px 6px',
+          background: 'rgba(253,203,110,0.06)',
+          borderRadius: 6,
+          borderLeft: '2px solid rgba(253,203,110,0.3)',
+        }}>
+          聽牌中 — 若和了牌出現，可在牌堆選擇器點擊「和了牌出現」分析榮和/見逃
+        </div>
+      )}
+
       {/* Tile count */}
       <div style={{
         marginTop: 4,

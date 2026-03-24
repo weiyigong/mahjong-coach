@@ -29,12 +29,16 @@ function makeInitialState(): GameState {
     pickTarget: 'hand',
     scores: [25000, 25000, 25000, 25000],
     currentRound: 'E1',
+    winningTileAppeared: null,
+    winningTileFrom: null,
   };
 }
 
 interface GameStore extends GameState {
   // Actions
   setPickTarget: (target: PickTarget) => void;
+  setWinningTileAppeared: (tile: Tile | null, from: Wind | null) => void;
+  clearWinningTile: () => void;
   addTileToHand: (suit: Tile['suit'], value: number) => void;
   removeTileFromHand: (tileId: string) => void;
   setDrawnTile: (suit: Tile['suit'], value: number) => void;
@@ -65,6 +69,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
   ...makeInitialState(),
 
   setPickTarget: (target) => set({ pickTarget: target }),
+
+  setWinningTileAppeared: (tile, from) => set({ winningTileAppeared: tile, winningTileFrom: from }),
+  clearWinningTile: () => set({ winningTileAppeared: null, winningTileFrom: null }),
 
   addTileToHand: (suit, value) =>
     set(state => {

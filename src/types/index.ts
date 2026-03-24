@@ -47,6 +47,18 @@ export interface GameState {
   lastDrawnTile: Tile | null;
   scores: [number, number, number, number]; // [self, south, west, north]
   currentRound: string; // E1-E4, S1-S4
+  winningTileAppeared: Tile | null;
+  winningTileFrom: Wind | null;
+}
+
+export interface RonPassAdvice {
+  shouldRon: boolean;
+  ronValue: number;
+  tsumoValue: number;
+  ronPlacement: number;
+  tsumoPlacement: number;
+  tsumoProb: number;
+  reason: string;
 }
 
 export interface DiscardRecommendation {
