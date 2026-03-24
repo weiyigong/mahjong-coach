@@ -3,6 +3,7 @@ import { tileToIndex, tilesToCounts, indexToTile, createTile, tileDisplayName } 
 import { calcShanten, findEffectiveTiles, shantenLabel } from './shanten';
 import { calcTileSafetyScore } from './safety';
 import { estimateHandValue } from './handValue';
+import { evaluateWinValue } from './placement';
 
 // Check if a tile is a dora (matches doraIndicator + 1 in sequence)
 function isDoraTile(tile: Tile, doraIndicators: Tile[]): boolean {
@@ -89,11 +90,13 @@ export function analyzeDiscards(gameState: GameState): DiscardRecommendation[] {
     handValue: number;
     isDora: boolean;
     waitQualityBonus: number; // bonus applied to tenpai discard ranking
+    placementBonus: number;   // extra bonus when winning this tenpai would change placement
   }
 
   const results: DiscardResult[] = [];
   const seenTypes = new Set<string>();
   const isDealer = gameState.seatWind === 'east';
+  const scores = gameState.scores ?? [25000, 25000, 25000, 25000];
 
   for (let i = 0; i < hand.length; i++) {
     const tile = hand[i];
@@ -144,6 +147,14 @@ export function analyzeDiscards(gameState: GameState): DiscardRecommendation[] {
       else waitQualityBonus = -10;
     }
 
+    // Placement bonus: at tenpai, boost priority if winning with this hand value changes placement
+    let placementBonus = 0;
+    if (shantenAfter === 0) {
+      const winEval = evaluateWinValue(scores, 0, handValue, null, isDealer);
+      if (winEval.placementDelta >= 2) placementBonus = 35;
+      else if (winEval.placementDelta === 1) placementBonus = 20;
+    }
+
     const reason = buildDiscardReason(
       tile,
       shantenAfter,
@@ -165,6 +176,7 @@ export function analyzeDiscards(gameState: GameState): DiscardRecommendation[] {
       handValue,
       isDora,
       waitQualityBonus,
+      placementBonus,
     });
 
     baseCounts[idx]++;
@@ -178,8 +190,8 @@ export function analyzeDiscards(gameState: GameState): DiscardRecommendation[] {
     if (a.shantenAfter !== b.shantenAfter) return a.shantenAfter - b.shantenAfter;
     if (a.isDora !== b.isDora) return a.isDora ? 1 : -1; // non-dora discards rank higher
     if (a.shantenAfter === 0 && b.shantenAfter === 0) {
-      const prioA = a.effectiveTileCount + a.waitQualityBonus;
-      const prioB = b.effectiveTileCount + b.waitQualityBonus;
+      const prioA = a.effectiveTileCount + a.waitQualityBonus + a.placementBonus;
+      const prioB = b.effectiveTileCount + b.waitQualityBonus + b.placementBonus;
       if (prioA !== prioB) return prioB - prioA;
     } else {
       if (b.effectiveTileCount !== a.effectiveTileCount) return b.effectiveTileCount - a.effectiveTileCount;

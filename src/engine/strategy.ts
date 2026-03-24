@@ -4,6 +4,7 @@ import { calcShanten } from './shanten';
 import { analyzeDiscards } from './efficiency';
 import { estimateHandValue } from './handValue';
 import { computePlacements } from '../store/gameStore';
+import { evaluateWinValue, placementValue } from './placement';
 
 // Main strategy engine: decides between attack, flexible, defense
 export function calcStrategy(gameState: GameState): StrategyResult {
@@ -68,16 +69,49 @@ export function calcStrategy(gameState: GameState): StrategyResult {
     sortedDiscards.forEach((d, i) => { d.rank = i + 1; });
   }
 
+  // Placement-awareness: evaluate whether winning would improve placement
+  const scores = gameState.scores ?? [25000, 25000, 25000, 25000];
+  const winEval = evaluateWinValue(scores, 0, handValue, null, isDealer);
+
+  // At tenpai, prepend a placement change note
+  if (currentShanten === 0) {
+    let placementNote: string;
+    if (winEval.placementDelta > 0) {
+      const valBefore = placementValue(winEval.placementBefore);
+      const valAfter = placementValue(winEval.placementAfter);
+      const umaDiff = Math.abs(valAfter - valBefore);
+      placementNote = `和了可從第${winEval.placementBefore}位升至第${winEval.placementAfter}位 (+${umaDiff} uma差)。`;
+    } else {
+      placementNote = `和了仍維持第${winEval.placementBefore}位。`;
+    }
+    explanation = placementNote + explanation;
+
+    // Winning would change placement: upgrade flexible to attack
+    if (winEval.placementDelta > 0 && mode === 'flexible') {
+      mode = 'attack';
+      explanation = '(昇位機會) ' + explanation;
+    }
+  }
+
   // Placement-awareness for final rounds
   const isLastRounds = gameState.currentRound === 'S3' || gameState.currentRound === 'S4';
   if (isLastRounds) {
-    const placements = computePlacements(gameState.scores);
+    const placements = computePlacements(scores);
     const myPlacement = placements[0];
     let placementNote: string;
     if (myPlacement === 1) {
-      placementNote = `目前第1位，注意防守保持領先。`;
+      // Check if we have a commanding lead (>12000 points ahead of 2nd place)
+      const sortedScores = [...scores].sort((a, b) => b - a);
+      const leadOver2nd = scores[0] - sortedScores[1];
+      if (leadOver2nd > 12000) {
+        placementNote = `大幅領先第1位，注意防守鞏固。`;
+        if (mode === 'attack') mode = 'flexible';
+      } else {
+        placementNote = `目前第1位，注意防守保持領先。`;
+      }
     } else if (myPlacement >= 3) {
       placementNote = `最終局，目前第${myPlacement}位，需要進攻追分。`;
+      if (mode === 'flexible') mode = 'attack';
     } else {
       placementNote = `目前第2位，保持穩定爭取1位。`;
     }
