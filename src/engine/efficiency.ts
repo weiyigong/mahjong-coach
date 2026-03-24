@@ -2,6 +2,18 @@ import type { Tile, Meld, DiscardRecommendation, EffectiveTile, GameState, Safte
 import { tileToIndex, tilesToCounts, indexToTile, createTile, tileDisplayName } from './tiles';
 import { calcShanten, findEffectiveTiles, shantenLabel } from './shanten';
 import { calcTileSafetyScore } from './safety';
+import { estimateHandValue } from './handValue';
+
+// Check if a tile is a dora (matches doraIndicator + 1 in sequence)
+function isDoraTile(tile: Tile, doraIndicators: Tile[]): boolean {
+  const tileIdx = tileToIndex(tile);
+  for (const indicator of doraIndicators) {
+    const indIdx = tileToIndex(indicator);
+    const doraIdx = (indIdx % 9) === 8 ? indIdx - 8 : indIdx + 1;
+    if (tileIdx === doraIdx) return true;
+  }
+  return false;
+}
 
 // Count how many copies of each tile are visible (discards + melds + dora indicators)
 export function countVisibleTiles(gameState: GameState): number[] {
@@ -72,8 +84,15 @@ export function analyzeDiscards(gameState: GameState): DiscardRecommendation[] {
   // Compute base hand counts (hand + drawn tile)
   const baseCounts = tilesToCounts(hand);
 
-  const results: DiscardRecommendation[] = [];
+  // Extended internal type to carry extra sort data
+  interface DiscardResult extends DiscardRecommendation {
+    handValue: number;
+    isDora: boolean;
+  }
+
+  const results: DiscardResult[] = [];
   const seenTypes = new Set<string>();
+  const isDealer = gameState.seatWind === 'east';
 
   for (let i = 0; i < hand.length; i++) {
     const tile = hand[i];
@@ -101,6 +120,20 @@ export function analyzeDiscards(gameState: GameState): DiscardRecommendation[] {
     // Safety score
     const { score: safetyScore, breakdown } = calcTileSafetyScore(tile, gameState);
 
+    // Hand value after discarding this tile (for ranking when shanten is equal)
+    const handAfterDiscard = hand.filter((_, j) => j !== i);
+    const handValue = estimateHandValue(
+      handAfterDiscard,
+      gameState.myMelds,
+      gameState.roundWind,
+      gameState.seatWind,
+      gameState.doraIndicators,
+      isDealer
+    );
+
+    // Dora awareness: flag tiles that are dora (should penalize discarding them)
+    const isDora = isDoraTile(tile, gameState.doraIndicators);
+
     const reason = buildDiscardReason(
       tile,
       shantenAfter,
@@ -119,16 +152,21 @@ export function analyzeDiscards(gameState: GameState): DiscardRecommendation[] {
       safetyBreakdown: breakdown,
       reason,
       rank: 0, // assigned after sorting
+      handValue,
+      isDora,
     });
 
     baseCounts[idx]++;
   }
 
-  // Sort: first by shanten (lower = better), then effective tile count (higher = better),
-  // then safety (higher = better)
+  // Sort: shanten (lower = better) → dora penalty (non-dora first) →
+  //       effective tile count (higher = better) → hand value (higher = better) →
+  //       safety (higher = better)
   results.sort((a, b) => {
     if (a.shantenAfter !== b.shantenAfter) return a.shantenAfter - b.shantenAfter;
+    if (a.isDora !== b.isDora) return a.isDora ? 1 : -1; // non-dora discards rank higher
     if (b.effectiveTileCount !== a.effectiveTileCount) return b.effectiveTileCount - a.effectiveTileCount;
+    if (b.handValue !== a.handValue) return b.handValue - a.handValue;
     return b.safetyScore - a.safetyScore;
   });
 

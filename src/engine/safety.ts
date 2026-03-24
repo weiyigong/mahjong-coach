@@ -1,5 +1,6 @@
 import type { Tile, Opponent, GameState, SafteyDetail } from '../types';
 import { tileToIndex, isHonor } from './tiles';
+import { calcSequentialDiscardBonus } from './opponents';
 
 /**
  * Tile Safety Rating System
@@ -126,7 +127,8 @@ function baseSafetyByType(tile: Tile): number {
 function calcSafetyVsOpponent(
   tile: Tile,
   opp: Opponent,
-  allVisible: number[]
+  allVisible: number[],
+  turnNumber: number
 ): { score: number; label: string } {
   // Genbutsu: opponent personally discarded this tile → max safety
   if (isGenbutsu(tile, opp)) {
@@ -145,10 +147,12 @@ function calcSafetyVsOpponent(
     // Check suji
     const { bonus: sujiBonus, reason: sujiReason } = calcSujiBonus(tile, opp);
     const { bonus: kabeBonus, reason: kabeReason } = calcKabeBonus(tile, allVisible);
+    const seqBonus = calcSequentialDiscardBonus(tile, opp);
 
     const base = baseSafetyByType(tile);
-    const maxBonus = Math.max(sujiBonus, kabeBonus);
-    const score = Math.min(85, base + maxBonus);
+    const maxBonus = Math.max(sujiBonus, kabeBonus, seqBonus);
+    // Cap non-genbutsu safety at 70% vs riichi opponent
+    const score = Math.min(70, base + maxBonus);
     const label = kabeBonus > sujiBonus
       ? (kabeReason || (sujiReason || '立直危險'))
       : (sujiReason || (kabeReason || '立直危險'));
@@ -160,12 +164,17 @@ function calcSafetyVsOpponent(
   const base = baseSafetyByType(tile);
   const { bonus: sujiBonus, reason: sujiReason } = calcSujiBonus(tile, opp);
   const { bonus: kabeBonus, reason: kabeReason } = calcKabeBonus(tile, allVisible);
+  const seqBonus = calcSequentialDiscardBonus(tile, opp);
 
-  // Danger level adjustment
-  const dangerPenalty = opp.dangerLevel === 'dangerous' ? 15
+  // Danger level adjustment with late-game escalation
+  let dangerPenalty = opp.dangerLevel === 'dangerous' ? 15
     : opp.dangerLevel === 'suspicious' ? 8 : 0;
+  if (opp.dangerLevel === 'dangerous') {
+    if (turnNumber >= 15) dangerPenalty = Math.round(dangerPenalty * 2);
+    else if (turnNumber >= 12) dangerPenalty = Math.round(dangerPenalty * 1.5);
+  }
 
-  const maxBonus = Math.max(sujiBonus, kabeBonus);
+  const maxBonus = Math.max(sujiBonus, kabeBonus, seqBonus);
   const score = Math.max(10, Math.min(90, base + maxBonus - dangerPenalty));
 
   const label = opp.dangerLevel === 'dangerous'
@@ -200,7 +209,7 @@ export function calcTileSafetyScore(
   let totalWeight = 0;
 
   for (const opp of gameState.opponents) {
-    const { score, label } = calcSafetyVsOpponent(tile, opp, allVisible);
+    const { score, label } = calcSafetyVsOpponent(tile, opp, allVisible, gameState.turnNumber);
 
     // Weight: dangerous opponents matter more
     const weight = opp.dangerLevel === 'dangerous' ? 3

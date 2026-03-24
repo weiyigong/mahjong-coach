@@ -1,4 +1,4 @@
-import type { Opponent, DiscardInfo, DangerLevel } from '../types';
+import type { Tile, Opponent, DiscardInfo, DangerLevel } from '../types';
 import { isHonor, isTerminal, isSimple } from './tiles';
 
 /**
@@ -88,6 +88,68 @@ function calcMeldDanger(opp: Opponent): number {
   return 5;
 }
 
+// Honitsu/chinitsu detection: open melds all in one suit + few discards of that suit
+function calcHonitsuDanger(opp: Opponent): number {
+  if (opp.melds.length === 0) return 0;
+
+  // Collect non-honor suits used in melds
+  const meldSuits = new Set<string>();
+  for (const meld of opp.melds) {
+    for (const tile of meld.tiles) {
+      if (tile.suit !== 'honor') meldSuits.add(tile.suit);
+    }
+  }
+
+  if (meldSuits.size !== 1) return 0; // melds span multiple suits, not honitsu
+  const targetSuit = [...meldSuits][0];
+
+  const totalDiscards = opp.discards.length;
+  if (totalDiscards === 0) return 0;
+
+  const suitDiscards = opp.discards.filter(d => d.tile.suit === targetSuit).length;
+  const suitDiscardRatio = suitDiscards / totalDiscards;
+
+  // All melds in one suit AND barely discarding that suit → likely honitsu/chinitsu
+  if (suitDiscardRatio <= 0.1) return 15;
+
+  return 0;
+}
+
+// Sequential discard pattern: tiles in ascending/descending order within same suit
+// indicates broken connections → nearby tiles in that suit are safer.
+// Returns a safety bonus (0-20) for a specific tile against this opponent.
+export function calcSequentialDiscardBonus(tile: Tile, opp: Opponent): number {
+  if (tile.suit === 'honor') return 0;
+
+  // Get discards in this suit sorted by turn
+  const suitDiscards = opp.discards
+    .filter(d => d.tile.suit === tile.suit)
+    .sort((a, b) => a.turn - b.turn)
+    .map(d => d.tile.value);
+
+  if (suitDiscards.length < 3) return 0;
+
+  // Check for ascending or descending sequence (gaps of at most 3 between consecutive discards)
+  let ascending = true;
+  let descending = true;
+  for (let i = 1; i < suitDiscards.length; i++) {
+    const diff = suitDiscards[i] - suitDiscards[i - 1];
+    if (diff <= 0 || diff > 3) ascending = false;
+    if (diff >= 0 || diff < -3) descending = false;
+  }
+
+  if (!ascending && !descending) return 0;
+
+  // Tile is near the discarded range → connections in this area are broken → safer
+  const minVal = Math.min(...suitDiscards);
+  const maxVal = Math.max(...suitDiscards);
+  if (tile.value >= minVal - 1 && tile.value <= maxVal + 1) {
+    return 20;
+  }
+
+  return 0;
+}
+
 // Calculate total danger score (0-100) and level
 export function calcDangerScore(opp: Opponent): { score: number; level: DangerLevel } {
   let score = 0;
@@ -96,6 +158,7 @@ export function calcDangerScore(opp: Opponent): { score: number; level: DangerLe
   score += calcDiscardPatternDanger(opp.discards);
   score += calcSpeedDanger(opp);
   score += calcMeldDanger(opp);
+  score += calcHonitsuDanger(opp);
 
   // Clamp 0-100
   score = Math.min(100, Math.max(0, score));
