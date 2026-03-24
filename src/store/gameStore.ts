@@ -113,7 +113,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
         const { score, level } = calcDangerScore({ ...opp, discards: newDiscards });
         return { ...opp, discards: newDiscards, dangerScore: score, dangerLevel: level };
       });
-      return { opponents: newOpponents };
+      // Auto-advance turn when adding opponent discards
+      return { opponents: newOpponents, turnNumber: state.turnNumber + 1 };
     }),
 
   removeLastOpponentDiscard: (position) =>
