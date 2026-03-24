@@ -70,6 +70,8 @@ export interface DiscardRecommendation {
   safetyBreakdown: SafteyDetail[];
   reason: string;               // Chinese explanation
   rank: number;
+  safetyNote?: string;          // additional note (e.g. 電報 strategy)
+  dealInTarget?: Wind;          // if this tile is a candidate for intentional deal-in
 }
 
 export interface SafteyDetail {
@@ -78,12 +80,24 @@ export interface SafteyDetail {
   label: string; // 現物/筋/安全/注意/危險
 }
 
+export interface DealInAdvice {
+  recommend: boolean;
+  cheapTarget: Wind;
+  cheapEstimate: number;
+  dangerousTarget: Wind;
+  dangerousEstimate: number;
+  placementImpactCheap: string;
+  placementImpactDangerous: string;
+  reason: string;
+}
+
 export interface StrategyResult {
   mode: StrategyMode;
   explanation: string;
   discards: DiscardRecommendation[];
   winProbability: number;
   expectedValue: number;
+  dealInAdvice?: DealInAdvice;
 }
 
 export interface ChiPonKanAdvice {

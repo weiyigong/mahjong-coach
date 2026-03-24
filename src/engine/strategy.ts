@@ -1,10 +1,11 @@
-import type { GameState, StrategyResult, StrategyMode, Opponent, DiscardRecommendation, RonPassAdvice } from '../types';
+import type { GameState, StrategyResult, StrategyMode, Opponent, DiscardRecommendation, RonPassAdvice, DealInAdvice, Wind } from '../types';
 import { tilesToCounts, tileToIndex, tileDisplayName } from './tiles';
 import { calcShanten, calcNormalShanten, calcChitoiShanten, findEffectiveTiles } from './shanten';
 import { analyzeDiscards } from './efficiency';
 import { estimateHandValue } from './handValue';
 import { computePlacements } from '../store/gameStore';
-import { evaluateWinValue, placementValue } from './placement';
+import { evaluateWinValue, placementValue, getPlacement, simulateWin } from './placement';
+import { estimateOpenHandValue } from './opponents';
 
 // Main strategy engine: decides between attack, flexible, defense
 export function calcStrategy(gameState: GameState): StrategyResult {
@@ -67,6 +68,36 @@ export function calcStrategy(gameState: GameState): StrategyResult {
   if (mode === 'defense') {
     sortedDiscards = sortedDiscards.sort((a, b) => b.safetyScore - a.safetyScore);
     sortedDiscards.forEach((d, i) => { d.rank = i + 1; });
+  }
+
+  // 電報 (intentional deal-in) check — only when in defense mode
+  let dealInAdvice: DealInAdvice | undefined;
+  if (mode === 'defense') {
+    const dealIn = checkDealInStrategy(gameState);
+    if (dealIn) {
+      dealInAdvice = dealIn;
+      if (dealIn.recommend) {
+        const posNames: Record<Wind, string> = { east: '上家', south: '下家', west: '對家', north: '北家' };
+        explanation += ` ⚡ 電報可行：考慮放銃給${posNames[dealIn.cheapTarget]}家（約${dealIn.cheapEstimate}點），避免${posNames[dealIn.dangerousTarget]}家的大牌（推定${dealIn.dangerousEstimate}點以上）`;
+
+        // Mark tiles that are candidates for intentional deal-in:
+        // dangerous to cheapTarget but genbutsu (or safer) for the dangerousTarget
+        const cheapOpp = gameState.opponents.find(o => o.position === dealIn.cheapTarget);
+        const dangerOpp = gameState.opponents.find(o => o.position === dealIn.dangerousTarget);
+        if (cheapOpp && dangerOpp) {
+          for (const d of sortedDiscards) {
+            const safeForDangerous = d.safetyBreakdown.find(s => s.opponent === dangerOpp.position);
+            const dangerForCheap = d.safetyBreakdown.find(s => s.opponent === cheapOpp.position);
+            // Tile is genbutsu/safe for dangerous opponent but risky for cheap opponent = 電報 candidate
+            if (safeForDangerous && safeForDangerous.score >= 90 &&
+                dangerForCheap && dangerForCheap.score < 70) {
+              d.safetyNote = `此牌對${posNames[dealIn.cheapTarget]}家危險但可接受（電報策略）`;
+              d.dealInTarget = dealIn.cheapTarget;
+            }
+          }
+        }
+      }
+    }
   }
 
   // Abandonment check: 七対子 transition and 型聽 pursuit
@@ -149,6 +180,7 @@ export function calcStrategy(gameState: GameState): StrategyResult {
     discards: sortedDiscards,
     winProbability: winProb,
     expectedValue,
+    dealInAdvice,
   };
 }
 
@@ -409,6 +441,168 @@ function reRankDiscardForChiitoi(
   });
 
   return sorted;
+}
+
+// Map opponent Wind position to score array index (scores = [self, south, west, north])
+function oppPositionToScoreIndex(position: Wind): number {
+  switch (position) {
+    case 'south': return 1;
+    case 'west': return 2;
+    case 'north': return 3;
+    default: return 1;
+  }
+}
+
+// Count visible dora among an opponent's melds and our hand
+function countVisibleDora(gameState: GameState): number {
+  if (gameState.doraIndicators.length === 0) return 0;
+  // A simple approximation: count doraIndicators as proxy for exposed dora count
+  return gameState.doraIndicators.length;
+}
+
+/**
+ * Phase 5 — 電報 (intentional deal-in) check.
+ *
+ * Returns advice when it's strategically correct to intentionally deal into
+ * a cheap hand to prevent a dangerous opponent from winning big.
+ */
+export function checkDealInStrategy(gameState: GameState): DealInAdvice | null {
+  const { opponents, scores } = gameState;
+
+  // Need at least 2 opponents with meaningful info
+  if (opponents.length < 2) return null;
+
+  // --- Find the MOST dangerous opponent ---
+  const sortedByDanger = [...opponents].sort((a, b) => {
+    // Riichi always tops the danger list
+    const aRiichi = a.riichiTurn !== null ? 1 : 0;
+    const bRiichi = b.riichiTurn !== null ? 1 : 0;
+    if (aRiichi !== bRiichi) return bRiichi - aRiichi;
+    return b.dangerScore - a.dangerScore;
+  });
+
+  const mostDangerous = sortedByDanger[0];
+  // Only proceed if the most dangerous opponent is actually threatening
+  if (mostDangerous.dangerLevel === 'normal' && mostDangerous.riichiTurn === null) return null;
+
+  // --- Estimate dangerous hand value ---
+  const doraCount = countVisibleDora(gameState);
+  const { minValue: dangerMin, maxValue: dangerMax } = estimateOpenHandValue(
+    mostDangerous,
+    gameState.roundWind,
+    doraCount
+  );
+  // Use a pessimistic estimate for the dangerous hand
+  const dangerousEstimate = mostDangerous.riichiTurn !== null
+    ? Math.round((dangerMin + dangerMax) / 2)
+    : dangerMax;
+
+  // If dangerous hand isn't threatening enough, skip
+  if (dangerousEstimate < 3900) return null;
+
+  // --- Find a CHEAP target opponent ---
+  // Criteria: 2+ open melds with no yakuhai → likely cheap hand
+  const cheapCandidates = opponents.filter(opp => {
+    if (opp === mostDangerous) return false;
+    if (opp.riichiTurn !== null) return false; // riichi is never "cheap"
+    if (opp.melds.length < 2) return false;    // need 2+ open melds
+
+    // Check if ANY meld contains yakuhai
+    const roundWindVal = getWindHonorValue(gameState.roundWind);
+    const seatWindVal = getWindHonorValue(opp.position);
+    for (const meld of opp.melds) {
+      for (const tile of meld.tiles) {
+        if (tile.suit === 'honor') {
+          if (tile.value >= 5) return false;                                      // dragon yakuhai
+          if (tile.value === roundWindVal || tile.value === seatWindVal) return false; // wind yakuhai
+        }
+      }
+    }
+    return true;
+  });
+
+  if (cheapCandidates.length === 0) return null;
+
+  // Pick the cheapest candidate (fewest melds, or lowest danger score)
+  const cheapTarget = cheapCandidates.sort((a, b) => {
+    const { maxValue: aMax } = estimateOpenHandValue(a, gameState.roundWind, 0);
+    const { maxValue: bMax } = estimateOpenHandValue(b, gameState.roundWind, 0);
+    return aMax - bMax;
+  })[0];
+
+  const { maxValue: cheapMax } = estimateOpenHandValue(cheapTarget, gameState.roundWind, 0);
+  const cheapEstimate = cheapMax;
+
+  // --- Check the 2x threshold: deal-in must be at least 2x cheaper ---
+  if (cheapEstimate >= dangerousEstimate * 0.5) return null;
+
+  // --- Placement impact analysis ---
+  const myScoreIndex = 0;
+  const cheapScoreIndex = oppPositionToScoreIndex(cheapTarget.position);
+  const dangerScoreIndex = oppPositionToScoreIndex(mostDangerous.position);
+
+  const currentPlacements = getPlacement(scores as number[]);
+  const myCurrentPlacement = currentPlacements[myScoreIndex];
+
+  // Simulate dealing into cheap hand (I lose cheapEstimate, cheapTarget gains it)
+  const scoresAfterCheap = simulateWin(
+    scores as number[], cheapScoreIndex, myScoreIndex, cheapEstimate, false
+  );
+  const placementsAfterCheap = getPlacement(scoresAfterCheap);
+  const myPlacementAfterCheap = placementsAfterCheap[myScoreIndex];
+
+  // Simulate dangerous opponent winning via tsumo (I pay roughly 1/4 of value for non-dealer tsumo)
+  const dangerOppIsDealer = mostDangerous.position === gameState.roundWind;
+  const myTsumoPay = dangerOppIsDealer
+    ? Math.round(dangerousEstimate / 3)
+    : Math.round(dangerousEstimate / 4);
+  const scoresAfterDangerous = [...scores as number[]];
+  scoresAfterDangerous[myScoreIndex] -= myTsumoPay;
+  scoresAfterDangerous[dangerScoreIndex] += myTsumoPay;
+  const placementsAfterDangerous = getPlacement(scoresAfterDangerous);
+  const myPlacementAfterDangerous = placementsAfterDangerous[myScoreIndex];
+
+  const posNames: Record<Wind, string> = { east: '上家', south: '下家', west: '對家', north: '北家' };
+
+  const placementImpactCheap = myPlacementAfterCheap === myCurrentPlacement
+    ? `仍維持第${myCurrentPlacement}位`
+    : `從第${myCurrentPlacement}位變為第${myPlacementAfterCheap}位`;
+
+  const placementImpactDangerous = myPlacementAfterDangerous === myCurrentPlacement
+    ? `仍維持第${myCurrentPlacement}位`
+    : `從第${myCurrentPlacement}位變為第${myPlacementAfterDangerous}位`;
+
+  // Only recommend deal-in if placement impact favors it:
+  // cheap deal-in keeps same or better placement, AND dangerous win is worse placement
+  const placementFavors = myPlacementAfterCheap <= myCurrentPlacement
+    && myPlacementAfterDangerous >= myCurrentPlacement;
+
+  const recommend = placementFavors;
+
+  const reason = recommend
+    ? `放銃${posNames[cheapTarget.position]}（約${cheapEstimate}點）可防止${posNames[mostDangerous.position]}的大牌（推定${dangerousEstimate}點以上）`
+    : `電報條件未完全滿足，僅供参考`;
+
+  return {
+    recommend,
+    cheapTarget: cheapTarget.position,
+    cheapEstimate,
+    dangerousTarget: mostDangerous.position,
+    dangerousEstimate,
+    placementImpactCheap,
+    placementImpactDangerous,
+    reason,
+  };
+}
+
+// Helper: convert Wind to honor tile value (matching tiles.ts windToHonorValue)
+function getWindHonorValue(wind: Wind): number {
+  switch (wind) {
+    case 'east': return 1;
+    case 'south': return 2;
+    case 'west': return 3;
+    case 'north': return 4;
+  }
 }
 
 // Evaluate whether to ron or pass (見逃) for tsumo

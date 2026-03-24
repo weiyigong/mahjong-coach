@@ -1,5 +1,5 @@
-import type { Tile, Opponent, DiscardInfo, DangerLevel } from '../types';
-import { isHonor, isTerminal, isSimple } from './tiles';
+import type { Tile, Opponent, DiscardInfo, DangerLevel, Wind } from '../types';
+import { isHonor, isTerminal, isSimple, windToHonorValue } from './tiles';
 
 /**
  * Bayesian Opponent Modeling
@@ -221,6 +221,70 @@ export function dangerLevelColor(level: DangerLevel): string {
     case 'normal': return '#00b894';
     case 'suspicious': return '#fdcb6e';
     case 'dangerous': return '#e17055';
+  }
+}
+
+/**
+ * Estimate the minimum and maximum point value of an opponent's hand
+ * based on their visible melds, riichi status, and dora count.
+ */
+export function estimateOpenHandValue(
+  opponent: Opponent,
+  roundWind: Wind,
+  doraCount: number = 0
+): { minValue: number; maxValue: number } {
+  // Riichi (closed hand): base 2600, scales with dora
+  if (opponent.riichiTurn !== null) {
+    const minVal = 2600;
+    const maxVal = 8000 + doraCount * 3900;
+    return { minValue: minVal, maxValue: maxVal };
+  }
+
+  // No open melds: estimate as cheap/flexible hand
+  if (opponent.melds.length === 0) {
+    return { minValue: 1000, maxValue: 3900 };
+  }
+
+  // Count yakuhai among open melds (one per meld that contains a yakuhai tile)
+  let yakuhaiCount = 0;
+  const roundWindVal = windToHonorValue(roundWind);
+  const seatWindVal = windToHonorValue(opponent.position);
+
+  for (const meld of opponent.melds) {
+    let meldHasYakuhai = false;
+    for (const tile of meld.tiles) {
+      if (tile.suit === 'honor') {
+        // Dragons (value 5=Haku, 6=Hatsu, 7=Chun) are always yakuhai
+        if (tile.value >= 5) { meldHasYakuhai = true; break; }
+        // Round wind or seat wind
+        if (tile.value === roundWindVal || tile.value === seatWindVal) {
+          meldHasYakuhai = true; break;
+        }
+      }
+    }
+    if (meldHasYakuhai) yakuhaiCount++;
+  }
+
+  // Dora multiplier: each visible dora roughly doubles value
+  const doraMultiplier = 1 + doraCount * 0.5;
+
+  if (yakuhaiCount === 0) {
+    // No yakuhai → likely tanyao or low-value hand
+    return {
+      minValue: Math.round(1000 * doraMultiplier),
+      maxValue: Math.round(2000 * doraMultiplier),
+    };
+  } else if (yakuhaiCount === 1) {
+    return {
+      minValue: Math.round(1300 * doraMultiplier),
+      maxValue: Math.round(3900 * doraMultiplier),
+    };
+  } else {
+    // 2+ yakuhai melds: significant hand
+    return {
+      minValue: Math.round(2600 * doraMultiplier),
+      maxValue: Math.round(7700 * doraMultiplier),
+    };
   }
 }
 
