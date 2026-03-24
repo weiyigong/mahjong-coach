@@ -12,10 +12,10 @@ interface RecommendationListProps {
 
 function getSafetyLabel(score: number): string {
   if (score >= 90) return '极安全';
-  if (score >= 75) return '较安全';
+  if (score >= 75) return '較安全';
   if (score >= 55) return '一般';
-  if (score >= 35) return '有风险';
-  return '危险！';
+  if (score >= 35) return '有風險';
+  return '危險！';
 }
 
 function getSafetyColor(score: number): string {
@@ -48,7 +48,7 @@ export const RecommendationList: React.FC<RecommendationListProps> = ({
         color: 'rgba(255,255,255,0.3)',
         fontSize: 13,
       }}>
-        请先输入手牌
+        请先輸入手牌
       </div>
     );
   }
@@ -70,7 +70,7 @@ export const RecommendationList: React.FC<RecommendationListProps> = ({
         marginBottom: 8,
         letterSpacing: 0.5,
       }}>
-        出牌建议 ({recommendations.length}种选择)
+        出牌建議 ({recommendations.length}种選擇)
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -145,7 +145,7 @@ export const RecommendationList: React.FC<RecommendationListProps> = ({
                       color: effColor,
                       fontWeight: 600,
                     }}>
-                      {rec.effectiveTileCount}张进张
+                      {rec.effectiveTileCount}张進張
                       {rec.effectiveTileTypes > 0 && ` (${rec.effectiveTileTypes}种)`}
                     </span>
                   )}
@@ -208,7 +208,7 @@ export const RecommendationList: React.FC<RecommendationListProps> = ({
           color: 'rgba(255,255,255,0.2)',
           marginTop: 6,
         }}>
-          还有 {recommendations.length - 5} 种选择
+          还有 {recommendations.length - 5} 种選擇
         </div>
       )}
     </div>

@@ -18,7 +18,7 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = ({ strategy }) => {
         color: 'rgba(255,255,255,0.25)',
         fontSize: 12,
       }}>
-        输入手牌后显示策略建议
+        輸入手牌后顯示策略建議
       </div>
     );
   }

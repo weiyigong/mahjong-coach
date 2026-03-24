@@ -131,7 +131,7 @@ export function dangerLevelLabel(level: DangerLevel): string {
   switch (level) {
     case 'normal': return '整理中';
     case 'suspicious': return '注意';
-    case 'dangerous': return '危险！';
+    case 'dangerous': return '危險！';
   }
 }
 

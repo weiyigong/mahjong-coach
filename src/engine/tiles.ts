@@ -63,7 +63,7 @@ export function sortTiles(tiles: Tile[]): Tile[] {
 
 // Display names
 const MAN_CHARS = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
-const HONOR_NAMES = ['東', '南', '西', '北', '白', '発', '中'];
+const HONOR_NAMES = ['東', '南', '西', '北', '白', '發', '中'];
 const HONOR_NAMES_FULL = ['东风', '南风', '西风', '北风', '白板', '发财', '红中'];
 
 export function tileDisplayName(tile: Tile): string {
@@ -97,7 +97,7 @@ export function windLabelChinese(wind: Wind): string {
 }
 
 export function positionLabel(wind: Wind): string {
-  return { east: '上家', south: '下家', west: '对家', north: '下家' }[wind];
+  return { east: '上家', south: '下家', west: '對家', north: '下家' }[wind];
 }
 
 // Kokushi tiles (terminals + honors)

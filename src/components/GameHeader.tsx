@@ -53,7 +53,7 @@ export const GameHeader: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {/* Round wind selector */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>场风</span>
+            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>場風</span>
             <div style={{ display: 'flex', gap: 2 }}>
               {WIND_OPTIONS.slice(0, 2).map(w => (
                 <button
@@ -81,7 +81,7 @@ export const GameHeader: React.FC = () => {
 
           {/* Seat wind selector */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>自风</span>
+            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>自風</span>
             <div style={{ display: 'flex', gap: 2 }}>
               {WIND_OPTIONS.map(w => (
                 <button
@@ -166,10 +166,10 @@ export const GameHeader: React.FC = () => {
         marginBottom: 8,
         flexWrap: 'wrap',
       }}>
-        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', flexShrink: 0 }}>宝牌:</span>
+        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', flexShrink: 0 }}>寶牌:</span>
         {doraIndicators.length === 0 ? (
           <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)' }}>
-            点击下方"宝牌指示"添加
+            點擊下方"寶牌指示"添加
           </span>
         ) : (
           <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>

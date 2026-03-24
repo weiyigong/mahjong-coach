@@ -37,7 +37,7 @@ const SIZE_CONFIG = {
 };
 
 const HONOR_CHARS: Record<number, string> = {
-  1: '東', 2: '南', 3: '西', 4: '北', 5: '白', 6: '発', 7: '中',
+  1: '東', 2: '南', 3: '西', 4: '北', 5: '白', 6: '發', 7: '中',
 };
 
 const HONOR_COLORS: Record<number, string> = {

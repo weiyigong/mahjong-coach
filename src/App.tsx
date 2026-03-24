@@ -14,7 +14,7 @@ type TabId = 'play' | 'defend' | 'meld';
 
 const TAB_CONFIG: Array<{ id: TabId; label: string; icon: string }> = [
   { id: 'play', label: '出牌', icon: '🀄' },
-  { id: 'defend', label: '对手', icon: '🛡️' },
+  { id: 'defend', label: '對手', icon: '🛡️' },
   { id: 'meld', label: '副露', icon: '🀆' },
 ];
 
@@ -83,7 +83,7 @@ export const App: React.FC = () => {
                 color: '#fff',
                 lineHeight: 1.2,
               }}>
-                麻雀コーチ
+                麻雀教練
               </div>
               <div style={{
                 fontSize: 10,
@@ -104,8 +104,8 @@ export const App: React.FC = () => {
               borderRadius: 8,
               padding: '4px 8px',
             }}>
-              {strategy.mode === 'attack' && <span style={{ fontSize: 10, color: '#00b894' }}>🟢 进攻</span>}
-              {strategy.mode === 'flexible' && <span style={{ fontSize: 10, color: '#fdcb6e' }}>🟡 灵活</span>}
+              {strategy.mode === 'attack' && <span style={{ fontSize: 10, color: '#00b894' }}>🟢 進攻</span>}
+              {strategy.mode === 'flexible' && <span style={{ fontSize: 10, color: '#fdcb6e' }}>🟡 靈活</span>}
               {strategy.mode === 'defense' && <span style={{ fontSize: 10, color: '#e17055' }}>🔴 防守</span>}
             </div>
           )}

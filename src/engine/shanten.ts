@@ -143,11 +143,11 @@ export function shantenFromTileIndices(indices: number[], openMentsuCount = 0): 
 // Human-readable shanten label
 export function shantenLabel(shanten: number): string {
   if (shanten === -1) return '和了！';
-  if (shanten === 0) return '听牌';
-  if (shanten === 1) return '一向听';
-  if (shanten === 2) return '两向听';
-  if (shanten === 3) return '三向听';
-  return `${shanten}向听`;
+  if (shanten === 0) return '聽牌';
+  if (shanten === 1) return '一向聽';
+  if (shanten === 2) return '两向聽';
+  if (shanten === 3) return '三向聽';
+  return `${shanten}向聽`;
 }
 
 // Find all tiles that reduce shanten (effective tiles / 有効牌)

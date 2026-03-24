@@ -153,24 +153,24 @@ function buildDiscardReason(
     if (shantenAfter === -1) {
       parts.push('直接和了！');
     } else {
-      parts.push(`有效进张${effectiveTileCount}张(${effectiveTileTypes}种)`);
+      parts.push(`有效進張${effectiveTileCount}张(${effectiveTileTypes}种)`);
     }
   } else {
-    parts.push(`有效进张${effectiveTileCount}张`);
+    parts.push(`有效進張${effectiveTileCount}张`);
   }
 
   // Safety comment
-  const genbutsuOpp = breakdown.find(b => b.label === '现物');
-  const hasRiichi = breakdown.some(b => b.label === '立直危险');
+  const genbutsuOpp = breakdown.find(b => b.label === '現物');
+  const hasRiichi = breakdown.some(b => b.label === '立直危險');
 
   if (safetyScore >= 90 && genbutsuOpp) {
-    parts.push('是现物，极安全');
+    parts.push('是現物，极安全');
   } else if (safetyScore >= 75) {
-    parts.push('安全度较高');
+    parts.push('安全度較高');
   } else if (safetyScore < 40 && hasRiichi) {
-    parts.push('⚠️立直对手危险，谨慎');
+    parts.push('⚠️立直對手危險，謹慎');
   } else if (safetyScore < 50) {
-    parts.push('有一定危险度');
+    parts.push('有一定危險度');
   }
 
   return parts.join('，');

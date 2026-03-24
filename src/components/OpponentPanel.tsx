@@ -7,13 +7,13 @@ import { useGameStore } from '../store/gameStore';
 
 interface OpponentRowProps {
   opponent: Opponent;
-  seatRelation: string; // 上家, 对家, 下家
+  seatRelation: string; // 上家, 對家, 下家
 }
 
 const WIND_TO_RELATION: Record<Wind, string> = {
   east: '上家',
   south: '下家',
-  west: '对家',
+  west: '對家',
   north: '下家',
 };
 
@@ -24,7 +24,7 @@ function getRelation(seatWind: Wind, oppPosition: Wind): string {
   const oppIdx = order.indexOf(oppPosition);
   const diff = (oppIdx - seatIdx + 4) % 4;
   if (diff === 1) return '下家';  // next to discard, can chi
-  if (diff === 2) return '对面';  // across
+  if (diff === 2) return '對面';  // across
   if (diff === 3) return '上家';  // can take chi from them
   return '自家';
 }
@@ -111,7 +111,7 @@ const OpponentRow: React.FC<OpponentRowProps & { seatWind: Wind }> = ({ opponent
               fontSize: 10,
               cursor: 'pointer',
             }}
-            title="撤销最后一张弃牌"
+            title="撤銷最后一张棄牌"
           >
             ↩
           </button>
@@ -159,7 +159,7 @@ const OpponentRow: React.FC<OpponentRowProps & { seatWind: Wind }> = ({ opponent
       }}>
         {opponent.discards.length === 0 ? (
           <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', alignSelf: 'center' }}>
-            暂无弃牌
+            暫無棄牌
           </span>
         ) : (
           opponent.discards.map((d, i) => (
@@ -191,7 +191,7 @@ const OpponentRow: React.FC<OpponentRowProps & { seatWind: Wind }> = ({ opponent
           borderTop: '1px solid rgba(255,255,255,0.06)',
         }}>
           <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginBottom: 4 }}>
-            危险度: {opponent.dangerScore}/100
+            危險度: {opponent.dangerScore}/100
           </div>
           <div style={{
             width: '100%',
@@ -251,7 +251,7 @@ export const OpponentPanel: React.FC = () => {
         letterSpacing: 0.5,
         textTransform: 'uppercase' as const,
       }}>
-        对手状况
+        對手状况
       </div>
       {opponents.map(opp => (
         <OpponentRow

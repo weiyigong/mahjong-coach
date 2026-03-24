@@ -61,7 +61,7 @@ export const HandDisplay: React.FC<HandDisplayProps> = ({ onTileClick, selectedT
           手牌为空
         </div>
         <div style={{ color: 'rgba(255,255,255,0.2)', fontSize: 11 }}>
-          在下方选择"我的手牌"然后点击牌面添加
+          在下方選擇"我的手牌"然后點擊牌面添加
         </div>
       </div>
     );
@@ -162,7 +162,7 @@ export const HandDisplay: React.FC<HandDisplayProps> = ({ onTileClick, selectedT
           <span style={{
             fontSize: 11,
             color: 'rgba(255,255,255,0.4)',
-          }}>向听数</span>
+          }}>向聽数</span>
           <span style={{
             fontSize: 14,
             fontWeight: 700,
@@ -196,7 +196,7 @@ export const HandDisplay: React.FC<HandDisplayProps> = ({ onTileClick, selectedT
             color: '#00b894',
             fontWeight: 600,
           }}>
-            听牌中！
+            聽牌中！
           </div>
         )}
       </div>

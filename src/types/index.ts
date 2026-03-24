@@ -61,7 +61,7 @@ export interface DiscardRecommendation {
 export interface SafteyDetail {
   opponent: Wind;
   score: number;
-  label: string; // 现物/筋/安全/注意/危险
+  label: string; // 現物/筋/安全/注意/危險
 }
 
 export interface StrategyResult {

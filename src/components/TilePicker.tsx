@@ -6,12 +6,12 @@ import { useGameStore } from '../store/gameStore';
 
 const TARGET_LABELS: Record<PickTarget, string> = {
   hand: '我的手牌',
-  east: '东家弃牌',
-  south: '南家弃牌',
-  west: '西家弃牌',
-  north: '北家弃牌',
-  dora: '宝牌指示',
-  myDiscard: '我的弃牌',
+  east: '东家棄牌',
+  south: '南家棄牌',
+  west: '西家棄牌',
+  north: '北家棄牌',
+  dora: '寶牌指示',
+  myDiscard: '我的棄牌',
 };
 
 const TARGET_COLORS: Record<PickTarget, string> = {
@@ -92,7 +92,7 @@ export const TilePicker: React.FC = () => {
     { value: 3, label: '西' },
     { value: 4, label: '北' },
     { value: 5, label: '白' },
-    { value: 6, label: '発' },
+    { value: 6, label: '發' },
     { value: 7, label: '中' },
   ];
 
@@ -148,7 +148,7 @@ export const TilePicker: React.FC = () => {
         fontWeight: 600,
         letterSpacing: 0.5,
       }}>
-        点击添加到：{TARGET_LABELS[pickTarget]}
+        點擊添加到：{TARGET_LABELS[pickTarget]}
       </div>
 
       {/* Suited tiles */}

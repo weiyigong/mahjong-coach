@@ -50,7 +50,7 @@ export const ChiPonKanAdvisor: React.FC = () => {
           {/* Tile selector: which tile was discarded by opponent */}
           <div style={{ marginBottom: 10 }}>
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginBottom: 6 }}>
-              对手打出的牌是：
+              對手打出的牌是：
             </div>
             <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
               {/* Quick buttons for common tiles */}
@@ -79,7 +79,7 @@ export const ChiPonKanAdvisor: React.FC = () => {
                 borderTop: '1px solid rgba(255,255,255,0.06)',
                 paddingTop: 8,
               }}>
-                分析: 对手打出 <strong style={{ color: '#e0e0e0' }}>{tileDisplayName(selectedTile)}</strong>
+                分析: 對手打出 <strong style={{ color: '#e0e0e0' }}>{tileDisplayName(selectedTile)}</strong>
               </div>
 
               {!hasAnyAdvice && (
@@ -108,7 +108,7 @@ export const ChiPonKanAdvisor: React.FC = () => {
               fontSize: 12,
               padding: 8,
             }}>
-              选择对手出的牌来获取建议
+              選擇對手出的牌來獲取建議
             </div>
           )}
         </div>
@@ -154,7 +154,7 @@ const AdviceCard: React.FC<AdviceCardProps> = ({ advice }) => {
           fontWeight: 700,
           color,
         }}>
-          {ACTION_LABELS[advice.action]} ({advice.recommend ? '建议' : '不建议'})
+          {ACTION_LABELS[advice.action]} ({advice.recommend ? '建議' : '不建議'})
         </span>
 
         {/* Meld tiles preview */}
@@ -180,8 +180,8 @@ const AdviceCard: React.FC<AdviceCardProps> = ({ advice }) => {
         fontSize: 10,
         color: 'rgba(255,255,255,0.3)',
       }}>
-        <span>操作前: {advice.shantenBefore}向听</span>
-        <span>操作后: {advice.shantenAfter >= 0 ? `${advice.shantenAfter}向听` : '和了！'}</span>
+        <span>操作前: {advice.shantenBefore}向聽</span>
+        <span>操作后: {advice.shantenAfter >= 0 ? `${advice.shantenAfter}向聽` : '和了！'}</span>
       </div>
     </div>
   );

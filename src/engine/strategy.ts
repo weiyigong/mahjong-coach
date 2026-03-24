@@ -71,7 +71,7 @@ export function calcStrategy(gameState: GameState): StrategyResult {
     }
   } else if (multipleThreats && currentShanten >= 2) {
     mode = 'defense';
-    explanation = '多家危险，形势不利，建议防守。';
+    explanation = '多家危險，形势不利，建議防守。';
   } else if (hasDangerousOpponent && currentShanten >= 3) {
     mode = 'defense';
     explanation = buildDefenseExplanation(dangerousOpponents, riichiOpponents, currentShanten);
@@ -79,7 +79,7 @@ export function calcStrategy(gameState: GameState): StrategyResult {
     // We're close to tenpai but there's danger
     if (handValue >= 8000) {
       mode = 'flexible';
-      explanation = `手牌价值高(约${handValue}点)，可考虑灵活应对。`;
+      explanation = `手牌價值高(约${handValue}点)，可考虑靈活應對。`;
     } else {
       mode = 'flexible';
       explanation = buildFlexibleExplanation(dangerousOpponents, riichiOpponents, currentShanten, handValue);
@@ -138,9 +138,9 @@ function buildAttackExplanation(shanten: number, handValue: number, winProb: num
   if (shanten === -1) return '已和牌！';
   if (shanten === 0) {
     const probPct = Math.round(winProb * 100);
-    return `已听牌，手牌价值约${handValue}点，积极进攻！`;
+    return `已聽牌，手牌價值约${handValue}点，積極進攻！`;
   }
-  return `形势乐观，继续进攻。手牌价值约${handValue}点。`;
+  return `形势樂觀，繼續進攻。手牌價值约${handValue}点。`;
 }
 
 function buildFlexibleExplanation(
@@ -150,14 +150,14 @@ function buildFlexibleExplanation(
   handValue: number
 ): string {
   const threats = [...dangerous, ...suspicious];
-  if (threats.length === 0) return `${shanten}向听，灵活应对。`;
+  if (threats.length === 0) return `${shanten}向聽，靈活應對。`;
 
   const threatNames = threats.slice(0, 2).map(o => {
-    const posMap: Record<string, string> = { east: '上家', south: '下家', west: '对家', north: '北家' };
+    const posMap: Record<string, string> = { east: '上家', south: '下家', west: '對家', north: '北家' };
     return posMap[o.position] || o.position;
   }).join('、');
 
-  return `${threatNames}有危险信号，优先打安全牌维持效率。手牌约${handValue}点，可考虑灵活路线。`;
+  return `${threatNames}有危險信号，優先打安全牌維持效率。手牌约${handValue}点，可考虑靈活路线。`;
 }
 
 function buildDefenseExplanation(
@@ -166,23 +166,23 @@ function buildDefenseExplanation(
   shanten: number
 ): string {
   const allThreats = [...riichi, ...dangerous];
-  if (allThreats.length === 0) return '建议防守，打安全牌。';
+  if (allThreats.length === 0) return '建議防守，打安全牌。';
 
   const names = allThreats.slice(0, 2).map(o => {
-    const posMap: Record<string, string> = { east: '上家', south: '下家', west: '对家', north: '北家' };
+    const posMap: Record<string, string> = { east: '上家', south: '下家', west: '對家', north: '北家' };
     return posMap[o.position] || o.position;
   }).join('、');
 
-  const reason = riichi.length > 0 ? '已立直' : '疑似听牌';
-  return `${names}${reason}，形势危险。${shanten >= 2 ? '放铳风险过高，' : ''}建议打最安全的牌防守。`;
+  const reason = riichi.length > 0 ? '已立直' : '疑似聽牌';
+  return `${names}${reason}，形势危險。${shanten >= 2 ? '放铳風險过高，' : ''}建議打最安全的牌防守。`;
 }
 
 // Strategy mode labels and colors
 export function strategyLabel(mode: StrategyMode): string {
   switch (mode) {
-    case 'attack': return '全力进攻';
-    case 'flexible': return '回し打ち';
-    case 'defense': return 'ベタオリ';
+    case 'attack': return '全力進攻';
+    case 'flexible': return '靈活應對';
+    case 'defense': return '完全防守';
   }
 }
 

@@ -134,10 +134,10 @@ function calcSafetyVsOpponent(
     if (opp.riichiTurn !== null) {
       const genDiscard = opp.discards.find(d => d.tile.suit === tile.suit && d.tile.value === tile.value);
       if (genDiscard && genDiscard.turn <= opp.riichiTurn) {
-        return { score: 95, label: '现物' };
+        return { score: 95, label: '現物' };
       }
     }
-    return { score: 95, label: '现物' };
+    return { score: 95, label: '現物' };
   }
 
   // If opponent is in riichi, use strict suji/kabe reasoning
@@ -150,10 +150,10 @@ function calcSafetyVsOpponent(
     const maxBonus = Math.max(sujiBonus, kabeBonus);
     const score = Math.min(85, base + maxBonus);
     const label = kabeBonus > sujiBonus
-      ? (kabeReason || (sujiReason || '立直危险'))
-      : (sujiReason || (kabeReason || '立直危险'));
+      ? (kabeReason || (sujiReason || '立直危險'))
+      : (sujiReason || (kabeReason || '立直危險'));
 
-    return { score, label: label || '立直危险' };
+    return { score, label: label || '立直危險' };
   }
 
   // Non-riichi opponent: use general safety heuristics
@@ -169,8 +169,8 @@ function calcSafetyVsOpponent(
   const score = Math.max(10, Math.min(90, base + maxBonus - dangerPenalty));
 
   const label = opp.dangerLevel === 'dangerous'
-    ? `危险(${sujiReason || kabeReason || '注意'})`
-    : (sujiReason || kabeReason || (opp.dangerLevel === 'suspicious' ? '注意' : '较安全'));
+    ? `危險(${sujiReason || kabeReason || '注意'})`
+    : (sujiReason || kabeReason || (opp.dangerLevel === 'suspicious' ? '注意' : '較安全'));
 
   return { score, label };
 }

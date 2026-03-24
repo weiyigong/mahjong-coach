@@ -28,7 +28,7 @@ export function estimateYaku(
   }
 
   if (isTsumo && isClosed) {
-    yakuList.push({ name: '门前清自摸', han: 1, closed: true });
+    yakuList.push({ name: '門前清自摸', han: 1, closed: true });
   }
 
   // Tanyao (断么九): all simples
@@ -55,16 +55,16 @@ export function estimateYaku(
   // Round wind yakuhai
   const roundWindValue = windToHonorValue(roundWind);
   if ((countMap.get(`honor${roundWindValue}`) || 0) >= 3) {
-    yakuList.push({ name: '场风', han: 1, closed: false });
+    yakuList.push({ name: '場風', han: 1, closed: false });
   }
 
   // Seat wind yakuhai (double if round == seat)
   const seatWindValue = windToHonorValue(seatWind);
   if (seatWindValue !== roundWindValue && (countMap.get(`honor${seatWindValue}`) || 0) >= 3) {
-    yakuList.push({ name: '自风', han: 1, closed: false });
+    yakuList.push({ name: '自風', han: 1, closed: false });
   } else if (seatWindValue === roundWindValue && (countMap.get(`honor${seatWindValue}`) || 0) >= 3) {
     // Double wind
-    yakuList.push({ name: '连风牌', han: 2, closed: false });
+    yakuList.push({ name: '連風牌', han: 2, closed: false });
   }
 
   // Chiitoi (七对子): 7 pairs

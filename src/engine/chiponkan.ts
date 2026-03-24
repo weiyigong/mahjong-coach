@@ -74,25 +74,25 @@ export function evaluateChi(
 
     if (shantenAfter === -1) {
       recommend = true;
-      reason = `吃牌直接和了！价值约${newValue}点`;
+      reason = `吃牌直接和了！價值约${newValue}点`;
     } else if (shantenAfter === 0 && baseShanten >= 1) {
       recommend = true;
-      reason = `吃牌后听牌，进攻效率高`;
+      reason = `吃牌后聽牌，進攻效率高`;
     } else if (shantenDiff > 0 && shantenAfter <= 1) {
       // Shanten improved and we're close
       if (newValue >= 3000) {
         recommend = true;
-        reason = `吃牌后${shantenAfter}向听，手牌约${newValue}点`;
+        reason = `吃牌后${shantenAfter}向聽，手牌约${newValue}点`;
       } else {
         recommend = false;
-        reason = `手牌价值偏低(${newValue}点)，失去门前清不值得`;
+        reason = `手牌價值偏低(${newValue}点)，失去門前清不值得`;
       }
     } else if (shantenDiff === 0) {
       recommend = false;
-      reason = `吃牌不改变向听数，失去门前清不划算`;
+      reason = `吃牌不改变向聽数，失去門前清不划算`;
     } else {
       recommend = false;
-      reason = `向听数未明显改善，保持门前`;
+      reason = `向聽数未明顯改善，保持門前`;
     }
 
     const seqStr = seq.map(v => `${v}${suit === 'man' ? '万' : suit === 'pin' ? '筒' : '索'}`).join('');
@@ -165,19 +165,19 @@ export function evaluatePon(
     reason = '碰牌直接和了！';
   } else if (shantenAfter === 0 && baseShanten >= 1) {
     recommend = true;
-    reason = `碰${tileDisplayName(calledTile)}后听牌`;
-    if (!isYakuhaiTile) reason += '，但失去门前清机会';
+    reason = `碰${tileDisplayName(calledTile)}后聽牌`;
+    if (!isYakuhaiTile) reason += '，但失去門前清機會';
   } else if (isYakuhaiTile && shantenAfter <= 1) {
     recommend = true;
-    reason = `${tileDisplayName(calledTile)}是役牌，碰牌确保有役，${shantenAfter}向听`;
+    reason = `${tileDisplayName(calledTile)}是役牌，碰牌確保有役，${shantenAfter}向聽`;
   } else if (shantenAfter < baseShanten && !isYakuhaiTile) {
     recommend = false;
-    reason = `碰牌效率一般，失去门前清(立直)机会`;
+    reason = `碰牌效率一般，失去門前清(立直)機會`;
   } else {
     recommend = shantenAfter <= baseShanten && isYakuhaiTile;
     reason = isYakuhaiTile
-      ? `役牌碰，获得基本役，${shantenAfter}向听`
-      : `向听数未改善，建议保持门前`;
+      ? `役牌碰，獲得基本役，${shantenAfter}向聽`
+      : `向聽数未改善，建議保持門前`;
   }
 
   return {
@@ -226,7 +226,7 @@ export function evaluateKan(
       recommend: true,
       shantenBefore: baseShanten,
       shantenAfter: baseShanten,
-      reason: '立直后暗杠，获得岭上牌，等待不变时可行',
+      reason: '立直后暗杠，獲得岭上牌，等待不变时可行',
     };
   }
 
@@ -249,18 +249,18 @@ export function evaluateKan(
 
   if (shantenAfter === 0) {
     recommend = true;
-    reason = `杠后听牌，且多摸岭上牌机会`;
+    reason = `杠后聽牌，且多摸岭上牌機會`;
   } else if (shantenAfter <= baseShanten && isYakuhaiTile) {
     recommend = true;
-    reason = `役牌杠，多一张进张机会`;
+    reason = `役牌杠，多一张進張機會`;
   } else if (shantenAfter <= baseShanten) {
     recommend = kanType === 'closed'; // closed kan doesn't show tiles
     reason = kanType === 'closed'
       ? `暗杠不改变手牌，还可多摸一张`
-      : `开杠暴露手牌，风险较大`;
+      : `開槓暴露手牌，風險較大`;
   } else {
     recommend = false;
-    reason = `杠后向听数恶化，不建议`;
+    reason = `杠后向聽数惡化，不建議`;
   }
 
   return {

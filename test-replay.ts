@@ -32,7 +32,9 @@ function windFromMjai(w: string): Wind {
 }
 
 // Read and parse MJAI file
-const lines = fs.readFileSync('/tmp/mahjong-test/sample_game.mjson', 'utf-8').trim().split('\n');
+const logFile = process.argv[2] || '/tmp/tenhou-games/2026011621gm-00a9-0000-4b7af114.mjson';
+console.log(`Loading: ${logFile}\n`);
+const lines = fs.readFileSync(logFile, 'utf-8').trim().split('\n');
 const events = lines.map(l => JSON.parse(l));
 
 console.log('=== REPLAYING TENHOU PHOENIX ROOM GAME ===\n');
