@@ -72,6 +72,66 @@ export function getEffectiveTilesInfo(
     .filter(et => et.remaining > 0);
 }
 
+// Fix 4: Tile connectivity score — how well a tile connects to the rest of the hand.
+// Tiles with high connectivity are valuable to keep; isolated tiles should be discarded first.
+// Score 0 = completely isolated, higher = more connected.
+// Fix 5: earlyHonorBonus parameter — in early turns, isolated non-yakuhai honors get negative
+// connectivity (bonus for discarding) since they're safe to dump now but dangerous later.
+export function calcConnectivity(
+  tile: Tile,
+  handCounts: number[],
+  turnNumber: number = 99,
+  roundWind?: string,
+  seatWind?: string
+): number {
+  if (tile.suit === 'honor') {
+    const idx = tileToIndex(tile);
+    const count = handCounts[idx];
+    if (count >= 3) return 6; // triplet — always keep
+    if (count >= 2) return 3; // pair — keep for potential pon/yakuhai
+
+    // Single honor: check if it's yakuhai (round wind, seat wind, or dragon)
+    const isYakuhai =
+      tile.value >= 5 || // dragons (白=5, 發=6, 中=7)
+      (roundWind === 'east' && tile.value === 1) ||
+      (roundWind === 'south' && tile.value === 2) ||
+      (roundWind === 'west' && tile.value === 3) ||
+      (roundWind === 'north' && tile.value === 4) ||
+      (seatWind === 'east' && tile.value === 1) ||
+      (seatWind === 'south' && tile.value === 2) ||
+      (seatWind === 'west' && tile.value === 3) ||
+      (seatWind === 'north' && tile.value === 4);
+
+    if (isYakuhai) return 2; // single yakuhai — slight keep value (potential pon = 1 han)
+
+    // Fix 5: Non-yakuhai single honor in early turns → negative connectivity (dump bonus)
+    // Turns 1-6: these are safe now but become dangerous later
+    if (turnNumber <= 6) {
+      return -(7 - turnNumber); // turn 1: -6, turn 2: -5, ..., turn 6: -1
+    }
+    return 0; // isolated non-yakuhai honor, mid/late game
+  }
+
+  const suitOffset = tile.suit === 'man' ? 0 : tile.suit === 'pin' ? 9 : 18;
+  const val = tile.value;
+  let score = 0;
+
+  // Check same tile (pair/triplet)
+  const selfIdx = suitOffset + val - 1;
+  if (handCounts[selfIdx] >= 3) score += 4;
+  else if (handCounts[selfIdx] >= 2) score += 2;
+
+  // Check adjacent tiles (±1) — forms a sequential pair (e.g., 4-5)
+  if (val > 1 && handCounts[suitOffset + val - 2] > 0) score += 3;
+  if (val < 9 && handCounts[suitOffset + val] > 0) score += 3;
+
+  // Check ±2 tiles — forms a kanchan (e.g., 3-5, waiting for 4)
+  if (val > 2 && handCounts[suitOffset + val - 3] > 0) score += 1;
+  if (val < 8 && handCounts[suitOffset + val + 1] > 0) score += 1;
+
+  return score;
+}
+
 // Core discard analysis: for each tile in hand, evaluate discarding it
 export function analyzeDiscards(gameState: GameState): DiscardRecommendation[] {
   const hand = [...gameState.myHand];
@@ -124,6 +184,15 @@ export function analyzeDiscards(gameState: GameState): DiscardRecommendation[] {
     // Safety score
     const { score: safetyScore, breakdown } = calcTileSafetyScore(tile, gameState);
 
+    // Fix 4+5: Connectivity — how well this tile connects to the rest of the hand
+    // Lower connectivity = better discard candidate (isolated tiles should go first)
+    // Includes early honor dump bonus (Fix 5)
+    const windMap: Record<string, string> = { east: 'east', south: 'south', west: 'west', north: 'north' };
+    const connectivity = calcConnectivity(
+      tile, baseCounts, gameState.turnNumber,
+      gameState.roundWind, gameState.seatWind
+    );
+
     // Hand value after discarding this tile (for ranking when shanten is equal)
     const handAfterDiscard = hand.filter((_, j) => j !== i);
     const handValue = estimateHandValue(
@@ -171,6 +240,7 @@ export function analyzeDiscards(gameState: GameState): DiscardRecommendation[] {
       effectiveTileTypes,
       safetyScore,
       safetyBreakdown: breakdown,
+      connectivity,
       reason,
       rank: 0, // assigned after sorting
       handValue,
@@ -182,13 +252,12 @@ export function analyzeDiscards(gameState: GameState): DiscardRecommendation[] {
     baseCounts[idx]++;
   }
 
-  // Sort: shanten (lower = better) → dora penalty (non-dora first) →
-  //       at tenpai (shantenAfter=0): wait-quality-adjusted priority (effectiveTileCount + waitQualityBonus)
-  //       otherwise: effective tile count (higher = better) →
-  //       hand value (higher = better) → safety (higher = better)
+  // Default sort: shanten → dora → efficiency → hand value → safety
+  // This is the initial ranking. strategy.ts re-sorts with mode-aware weighting after
+  // determining the strategy mode (Fix 3).
   results.sort((a, b) => {
     if (a.shantenAfter !== b.shantenAfter) return a.shantenAfter - b.shantenAfter;
-    if (a.isDora !== b.isDora) return a.isDora ? 1 : -1; // non-dora discards rank higher
+    if (a.isDora !== b.isDora) return a.isDora ? 1 : -1;
     if (a.shantenAfter === 0 && b.shantenAfter === 0) {
       const prioA = a.effectiveTileCount + a.waitQualityBonus + a.placementBonus;
       const prioB = b.effectiveTileCount + b.waitQualityBonus + b.placementBonus;

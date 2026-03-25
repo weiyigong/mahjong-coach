@@ -59,11 +59,11 @@ function calcSujiBonus(tile: Tile, opp: Opponent): { bonus: number; reason: stri
   let reason: string;
 
   if (otherMembers.every(v => oppDiscardValues.includes(v))) {
-    rawBonus = 40; reason = '双筋';
+    rawBonus = 25; reason = '双筋';
   } else if (tile.value === 4 || tile.value === 5 || tile.value === 6) {
-    rawBonus = 25; reason = '筋';
+    rawBonus = 15; reason = '筋';
   } else {
-    rawBonus = 30; reason = '筋';
+    rawBonus = 18; reason = '筋';
   }
 
   // Apply timing discount based on earliest discarded partner turn
@@ -163,13 +163,13 @@ function calcKabeBonus(tile: Tile, allVisible: number[]): { bonus: number; reaso
 // Middle tiles (3-7) are most dangerous, terminals/honors safer in general
 function baseSafetyByType(tile: Tile): number {
   if (tile.suit === 'honor') {
-    if (tile.value >= 5) return 35; // dragons are often yakuhai = dangerous
-    return 45; // winds: less commonly yakuhai
+    if (tile.value >= 5) return 25; // dragons are often yakuhai = dangerous
+    return 35; // winds: less commonly yakuhai
   }
-  if (tile.value === 1 || tile.value === 9) return 50; // terminals
-  if (tile.value === 2 || tile.value === 8) return 40;
-  if (tile.value === 3 || tile.value === 7) return 30;
-  return 20; // 4, 5, 6 — most dangerous (many sequences include them)
+  if (tile.value === 1 || tile.value === 9) return 45; // terminals
+  if (tile.value === 2 || tile.value === 8) return 30;
+  if (tile.value === 3 || tile.value === 7) return 20;
+  return 10; // 4, 5, 6 — most dangerous (many sequences include them)
 }
 
 // Main safety calculation for a tile against one opponent
@@ -206,8 +206,8 @@ function calcSafetyVsOpponent(
 
     const base = baseSafetyByType(tile);
     const maxBonus = Math.max(sujiBonus, kabeBonus, seqBonus, noChanceBonus);
-    // Cap non-genbutsu safety at 70% vs riichi opponent
-    const score = Math.min(70, base + maxBonus);
+    // Cap non-genbutsu safety at 55% vs riichi opponent
+    const score = Math.min(55, base + maxBonus);
     const topReason = noChanceBonus > 0 ? noChanceReason
       : kabeBonus > sujiBonus ? kabeReason : sujiReason;
     return { score, label: topReason || '立直危險' };
@@ -220,8 +220,8 @@ function calcSafetyVsOpponent(
   const seqBonus = calcSequentialDiscardBonus(tile, opp);
 
   // Danger level adjustment with late-game escalation
-  let dangerPenalty = opp.dangerLevel === 'dangerous' ? 15
-    : opp.dangerLevel === 'suspicious' ? 8 : 0;
+  let dangerPenalty = opp.dangerLevel === 'dangerous' ? 25
+    : opp.dangerLevel === 'suspicious' ? 12 : 0;
   if (opp.dangerLevel === 'dangerous') {
     if (turnNumber >= 15) dangerPenalty = Math.round(dangerPenalty * 2);
     else if (turnNumber >= 12) dangerPenalty = Math.round(dangerPenalty * 1.5);

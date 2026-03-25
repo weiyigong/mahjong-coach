@@ -6,6 +6,7 @@ import { estimateHandValue } from './handValue';
 import { computePlacements } from '../store/gameStore';
 import { evaluateWinValue, placementValue, getPlacement, simulateWin } from './placement';
 import { estimateOpenHandValue } from './opponents';
+import { evaluateRiichi } from './riichi';
 
 // Main strategy engine: decides between attack, flexible, defense
 export function calcStrategy(gameState: GameState): StrategyResult {
@@ -57,16 +58,37 @@ export function calcStrategy(gameState: GameState): StrategyResult {
       riichiOpponents,
       dangerousOpponents,
       suspiciousOpponents,
-      winProb
+      winProb,
+      gameState
     );
     mode = pfResult.mode;
     explanation = pfResult.explanation;
   }
 
-  // For defense mode, re-sort discards by safety (not efficiency)
+  // Fix 3: Re-sort discards using weighted efficiency+safety scoring based on strategy mode.
+  // Instead of efficiency-first with safety as tiebreaker (or vice versa for defense),
+  // use a blended score where weights depend on the mode.
   let sortedDiscards = [...discards];
-  if (mode === 'defense') {
-    sortedDiscards = sortedDiscards.sort((a, b) => b.safetyScore - a.safetyScore);
+  {
+    const effWeight = mode === 'attack' ? 0.8 : mode === 'flexible' ? 0.5 : mode === 'abandon' ? 0.4 : 0.2;
+    const safetyWeight = mode === 'defense' ? 0.8 : mode === 'flexible' ? 0.5 : mode === 'abandon' ? 0.3 : 0.2;
+    // Normalize: efficiency is 0-80ish, safety is 0-95. Scale efficiency to similar range.
+    const maxEff = Math.max(1, ...sortedDiscards.map(d => d.effectiveTileCount));
+    sortedDiscards.sort((a, b) => {
+      // Shanten is still king — lower shanten always wins
+      if (a.shantenAfter !== b.shantenAfter) return a.shantenAfter - b.shantenAfter;
+      // Dora penalty still applies
+      if (a.isDora !== b.isDora) return (a.isDora ? 1 : 0) - (b.isDora ? 1 : 0);
+      // Weighted blend with connectivity bonus for isolated tiles
+      // Low connectivity = isolated tile = bonus for discarding (subtract connectivity from score)
+      const normEffA = (a.effectiveTileCount / maxEff) * 100;
+      const normEffB = (b.effectiveTileCount / maxEff) * 100;
+      const connPenaltyA = (a.connectivity ?? 0) * 3; // connected tiles penalized as discards
+      const connPenaltyB = (b.connectivity ?? 0) * 3;
+      const scoreA = normEffA * effWeight + a.safetyScore * safetyWeight - connPenaltyA;
+      const scoreB = normEffB * effWeight + b.safetyScore * safetyWeight - connPenaltyB;
+      return scoreB - scoreA;
+    });
     sortedDiscards.forEach((d, i) => { d.rank = i + 1; });
   }
 
@@ -174,6 +196,11 @@ export function calcStrategy(gameState: GameState): StrategyResult {
     explanation = placementNote + explanation;
   }
 
+  // Riichi vs dama advice: only for closed tenpai hands
+  const riichiAdvice = currentShanten === 0 && gameState.myMelds.length === 0 && !gameState.isRiichi
+    ? evaluateRiichi(gameState) ?? undefined
+    : undefined;
+
   return {
     mode,
     explanation,
@@ -181,12 +208,134 @@ export function calcStrategy(gameState: GameState): StrategyResult {
     winProbability: winProb,
     expectedValue,
     dealInAdvice,
+    riichiAdvice,
   };
 }
 
-// 2-of-3 push/fold framework (RiichiBooks):
-// PUSH if 2+ of: (A) tenpai, (B) hand value >= 7700, (C) good wait (>=6 effective kinds)
-// FOLD if 2+ of: (A) shanten>=1, (B) hand value <7700, (C) bad wait (<4 at tenpai, <3 pre-tenpai)
+// Situational push/fold score adjustments based on game context (Suphx-style policy adaptation)
+interface SituationalAdjustments {
+  handValueThreshold: number; // adjusted from baseline 7700
+  pushScoreBonus: number;     // fractional bonus added to pushScore
+  foldScoreBonus: number;     // fractional bonus added to foldScore
+  contextNote: string;        // Chinese explanation of why strategy shifted
+}
+
+function calcSituationalAdjustments(
+  gameState: GameState,
+  currentShanten: number
+): SituationalAdjustments {
+  const scores = gameState.scores ?? [25000, 25000, 25000, 25000];
+  const isDealer = gameState.seatWind === 'east';
+  const riichiOpponents = gameState.opponents.filter(o => o.riichiTurn !== null);
+
+  let handValueThreshold = 7700;
+  let pushScoreBonus = 0;
+  let foldScoreBonus = 0;
+  const notes: string[] = [];
+
+  const isSouthRound = gameState.currentRound.startsWith('S');
+  const roundNum = parseInt(gameState.currentRound[1] ?? '1', 10);
+  const isLateGame = isSouthRound && roundNum >= 3; // S3/S4
+  const isMidGame = isSouthRound && roundNum <= 2;  // S1/S2
+
+  const myScore = scores[0];
+  const sortedScores = [...scores].sort((a, b) => b - a);
+  const placements = computePlacements(scores);
+  const myPlacement = placements[0];
+
+  // --- 1. Score-Differential Aware Thresholds (S3/S4) ---
+  if (isLateGame) {
+    const leadOver2nd = myScore - sortedScores[1];
+    const trailBehind1st = sortedScores[0] - myScore;
+
+    if (leadOver2nd >= 15000) {
+      // Commanding lead: raise threshold (harder to push) → fold more aggressively to protect lead
+      const ratio = Math.min(1.0, (leadOver2nd - 15000) / 10000);
+      handValueThreshold = Math.round(9000 + ratio * 6000); // 9000..15000
+      foldScoreBonus += 0.4 + ratio * 0.4;                   // 0.4..0.8
+      notes.push(`領先${Math.round(leadOver2nd / 1000)}k，護航模式`);
+    } else if (trailBehind1st >= 20000) {
+      // Deep deficit: lower threshold (easier to push) → push aggressively to catch up
+      const ratio = Math.min(1.0, (trailBehind1st - 20000) / 15000);
+      handValueThreshold = Math.round(6000 - ratio * 2000); // 6000..4000
+      pushScoreBonus += 0.5 + ratio * 0.5;                   // 0.5..1.0
+      notes.push(`落後${Math.round(trailBehind1st / 1000)}k，終局追分`);
+    } else if (leadOver2nd > 0) {
+      // Modest lead: slight fold preference (interpolated)
+      const ratio = Math.min(1.0, leadOver2nd / 15000);
+      handValueThreshold = Math.round(7700 + ratio * 1300); // 7700..9000
+      foldScoreBonus += ratio * 0.4;
+    } else if (trailBehind1st > 0) {
+      // Modest deficit: slight push preference (interpolated)
+      const ratio = Math.min(1.0, trailBehind1st / 20000);
+      handValueThreshold = Math.round(7700 - ratio * 1700); // 7700..6000
+      pushScoreBonus += ratio * 0.5;
+    }
+  }
+
+  // --- 2. Round-Aware Aggression Curve ---
+  if (isLateGame) {
+    if (myPlacement === 4) {
+      // 4th in S3/S4: placement score dominates — push almost everything
+      pushScoreBonus += 1.0;
+      notes.push('末位全力進攻');
+    } else if (myPlacement === 3) {
+      pushScoreBonus += 0.5;
+      notes.push('3位積極追分');
+    } else if (myPlacement === 1 && !notes.some(n => n.includes('領先'))) {
+      // Leading without commanding margin: mild fold preference
+      foldScoreBonus += 0.2;
+      notes.push('首位注意防守');
+    }
+  } else if (isMidGame && myPlacement >= 3) {
+    // S1/S2, lower half: loosen push threshold
+    pushScoreBonus += 0.3;
+    notes.push('中盤下位追分');
+  }
+
+  // --- 3. Dealer Premium ---
+  // Dealer wins pay 1.5×; winning extends round via ren-chan
+  if (isDealer) {
+    pushScoreBonus += 0.5;
+    notes.push('莊家積極進攻');
+  }
+
+  // --- 4. Facing Dealer Riichi ---
+  // Dealer ron is 1.5× damage — fold earlier
+  const facingDealerRiichi = riichiOpponents.some(o => o.position === gameState.roundWind);
+  if (facingDealerRiichi) {
+    foldScoreBonus += 0.8;
+    notes.push('對莊家立直加倍警戒');
+  }
+
+  // --- 4b. Facing ANY Riichi ---
+  // Any riichi increases deal-in risk significantly
+  if (riichiOpponents.length > 0) {
+    foldScoreBonus += 0.3;
+    notes.push('對立直加強警戒');
+  }
+
+  // --- 5. Oya Ren-chan (連荘) Value ---
+  // Dealer tenpai in S3/S4 while leading: staying dealer stops opponents catching up,
+  // even a cheap tenpai (1000-2000 pts) is strategically valuable
+  if (isDealer && isLateGame && myPlacement === 1 && currentShanten === 0) {
+    pushScoreBonus += 0.8;
+    foldScoreBonus = Math.max(0, foldScoreBonus - 0.5); // counteract fold pressure
+    notes.push('莊家聽牌連莊價值極高');
+  }
+
+  return {
+    handValueThreshold,
+    pushScoreBonus,
+    foldScoreBonus,
+    contextNote: notes.join('；'),
+  };
+}
+
+// 2-of-3 push/fold framework (RiichiBooks), with context-sensitive situational adjustments:
+// PUSH if 2+ of: (A) tenpai, (B) hand value >= threshold, (C) good wait (>=6 effective kinds)
+// FOLD if 2+ of: (A) shanten>=1, (B) hand value < threshold, (C) bad wait (<4 at tenpai, <3 pre-tenpai)
+// threshold and bonus scores are adjusted by calcSituationalAdjustments()
 function evalPushFold(
   currentShanten: number,
   handValue: number,
@@ -194,8 +343,12 @@ function evalPushFold(
   riichiOpponents: Opponent[],
   dangerousOpponents: Opponent[],
   suspiciousOpponents: Opponent[],
-  winProb: number
+  winProb: number,
+  gameState: GameState
 ): { mode: StrategyMode; explanation: string } {
+  // Fix 2: Only dangerous (score>=55) or riichi opponents are real threats.
+  // Suspicious opponents (score 25-54) add a small safety preference to discard ranking
+  // but do NOT change the strategy mode or trigger the push/fold framework.
   const hasAnyThreat = dangerousOpponents.length > 0 || riichiOpponents.length > 0;
   const allThreats = [...riichiOpponents, ...dangerousOpponents];
 
@@ -206,59 +359,68 @@ function evalPushFold(
     ? (bestDiscard?.effectiveTileTypes ?? 0)
     : (bestTenpaiDiscard?.effectiveTileTypes ?? bestDiscard?.effectiveTileTypes ?? 0);
 
-  // Push conditions
-  const condPushA = currentShanten === 0;                // (A) tenpai
-  const condPushB = handValue >= 7700;                   // (B) high value
-  const condPushC = effectiveKinds >= 6;                 // (C) good wait
+  // Compute situational adjustments
+  const adj = calcSituationalAdjustments(gameState, currentShanten);
+  const threshold = adj.handValueThreshold;
+  const contextPrefix = adj.contextNote ? `${adj.contextNote}。` : '';
 
-  // Fold conditions
-  const condFoldA = currentShanten >= 1;                 // (A) not tenpai
-  const condFoldB = handValue < 7700;                    // (B) low value
-  const condFoldC = currentShanten === 0                 // (C) bad wait
+  // Push conditions (using context-adjusted threshold)
+  const condPushA = currentShanten === 0;       // (A) tenpai
+  const condPushB = handValue >= threshold;      // (B) high value
+  const condPushC = effectiveKinds >= 6;         // (C) good wait
+
+  // Fold conditions (using context-adjusted threshold)
+  const condFoldA = currentShanten >= 1;         // (A) not tenpai
+  const condFoldB = handValue < threshold;       // (B) low value
+  const condFoldC = currentShanten === 0         // (C) bad wait
     ? effectiveKinds < 4
     : effectiveKinds < 3;
 
-  const pushScore = [condPushA, condPushB, condPushC].filter(Boolean).length;
-  const foldScore = [condFoldA, condFoldB, condFoldC].filter(Boolean).length;
+  // Apply fractional situational bonuses to the integer condition scores
+  const pushScore = [condPushA, condPushB, condPushC].filter(Boolean).length + adj.pushScoreBonus;
+  const foldScore = [condFoldA, condFoldB, condFoldC].filter(Boolean).length + adj.foldScoreBonus;
 
-  // Without active threats: attack unless all 3 fold conditions are met
+  // Fix 2: Without dangerous/riichi threats, stay in attack or flexible.
+  // Suspicious opponents do NOT trigger defense — they only shift to flexible.
   if (!hasAnyThreat) {
     if (foldScore >= 3) {
       return {
         mode: 'defense',
-        explanation: buildDefenseExplanation([], [], currentShanten),
+        explanation: contextPrefix + buildDefenseExplanation([], [], currentShanten),
       };
     }
-    if (suspiciousOpponents.length > 0 && foldScore >= 2) {
+    // Flexible: suspicious opponents present + fold conditions lean that way,
+    // OR strong fold conditions on their own (poor hand shape)
+    if ((suspiciousOpponents.length > 0 && foldScore >= 2) || foldScore >= 2.5) {
       return {
         mode: 'flexible',
-        explanation: buildFlexibleExplanation([], suspiciousOpponents, currentShanten, handValue),
+        explanation: contextPrefix + buildFlexibleExplanation([], suspiciousOpponents, currentShanten, handValue),
       };
     }
     return {
       mode: 'attack',
-      explanation: buildAttackExplanation(currentShanten, handValue, winProb),
+      explanation: contextPrefix + buildAttackExplanation(currentShanten, handValue, winProb),
     };
   }
 
-  // With threats: apply 2-of-3 framework
+  // With threats: apply 2-of-3 framework (scores are now context-adjusted floats)
   if (pushScore >= 2 && foldScore < 2) {
     return {
       mode: 'attack',
-      explanation: buildPushExplanation(condPushA, condPushB, condPushC, handValue, effectiveKinds, allThreats),
+      explanation: contextPrefix + buildPushExplanation(condPushA, condPushB, condPushC, handValue, effectiveKinds, allThreats),
     };
   }
   if (foldScore >= 2 && pushScore < 2) {
     return {
       mode: 'defense',
-      explanation: buildFoldExplanation(condFoldA, condFoldB, condFoldC, allThreats, currentShanten),
+      explanation: contextPrefix + buildFoldExplanation(condFoldA, condFoldB, condFoldC, allThreats, currentShanten),
     };
   }
 
   // Mixed / tie → flexible
   return {
     mode: 'flexible',
-    explanation: buildFlexibleExplanation(
+    explanation: contextPrefix + buildFlexibleExplanation(
       dangerousOpponents,
       [...riichiOpponents, ...suspiciousOpponents],
       currentShanten,

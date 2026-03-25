@@ -16,30 +16,35 @@ import { isHonor, isTerminal, isSimple, windToHonorValue } from './tiles';
  */
 
 // Base danger from discard pattern
+// Fix 1: Scale danger by how many middle tiles the opponent has discarded, not flat per-tile.
+// A single early 5m is normal hand-building (+5). Multiple middle discards compound: 1st=+5, 2nd=+10, 3rd=+20.
 function calcDiscardPatternDanger(discards: DiscardInfo[]): number {
   if (discards.length === 0) return 0;
 
   let danger = 0;
+  let earlyMiddleCount = 0; // count of early middle tile discards for compounding
 
   for (let i = 0; i < discards.length; i++) {
     const { tile, turn } = discards[i];
     const isEarly = turn <= 5;
     const isMid = turn > 5 && turn <= 9;
 
-    // Early middle tile discard = suspicious (they don't need it = hand already shaped)
+    // Early middle tile discard: compound scaling instead of flat bonus
+    // 1st middle tile = normal, 2nd = slightly suspicious, 3rd+ = very suspicious
     if (isEarly && isSimple(tile) && !isHonor(tile)) {
-      // 4,5,6 are most suspicious
+      earlyMiddleCount++;
       if (tile.value >= 4 && tile.value <= 6) {
-        danger += 15;
+        // Compound: 5, 10, 20 for 1st/2nd/3rd+ center tiles
+        danger += earlyMiddleCount === 1 ? 5 : earlyMiddleCount === 2 ? 10 : 20;
       } else {
-        // 3, 7 also suspicious but less so
-        danger += 8;
+        // 3, 7: less suspicious, compound: 3, 6, 12
+        danger += earlyMiddleCount === 1 ? 3 : earlyMiddleCount === 2 ? 6 : 12;
       }
     }
 
     // Mid-game discarding honors = still building = less dangerous
     if (isMid && isHonor(tile)) {
-      danger -= 3; // still in construction, slightly less dangerous
+      danger -= 5; // stronger signal: still constructing, not threatening
     }
 
     // Late-game discarding terminals = suspicious (making room for a tight hand)
@@ -82,10 +87,10 @@ function calcRiichiDanger(opp: Opponent): number {
 // 3+ open melds = likely tenpai; 4 open melds = definitely tenpai
 function calcMeldDanger(opp: Opponent): number {
   if (opp.melds.length === 0) return 0;
-  if (opp.melds.length >= 4) return 30; // definitely tenpai
-  if (opp.melds.length >= 3) return 15; // likely tenpai
-  if (opp.melds.length >= 2) return 12;
-  return 5;
+  if (opp.melds.length >= 4) return 40; // definitely tenpai
+  if (opp.melds.length >= 3) return 25; // likely tenpai
+  if (opp.melds.length >= 2) return 15;
+  return 8;
 }
 
 // Dama (silent tenpai) detection:
@@ -101,7 +106,9 @@ function calcDamaDanger(opp: Opponent): number {
     else break;
   }
 
-  return consecutive >= 3 ? 20 : 0;
+  if (consecutive >= 3) return 30;
+  if (consecutive >= 2) return 10;
+  return 0;
 }
 
 // Honitsu/chinitsu detection: open melds all in one suit + few discards of that suit
