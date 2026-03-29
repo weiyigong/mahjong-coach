@@ -283,7 +283,10 @@ export const App: React.FC = () => {
               />
             </div>
 
-            {/* Recommendations */}
+            {/* Tile picker — placed before recommendations so it stays accessible during tile entry */}
+            <TilePicker />
+
+            {/* Recommendations — below picker, collapsible */}
             {strategy && (
               <RecommendationList
                 recommendations={strategy.discards}
@@ -291,9 +294,6 @@ export const App: React.FC = () => {
                 onDiscard={handleDiscard}
               />
             )}
-
-            {/* Tile picker */}
-            <TilePicker />
           </>
         )}
 
