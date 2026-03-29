@@ -221,6 +221,93 @@ export function estimatePoints(han: number, fu: number, isDealer: boolean): numb
   }
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Hand Decomposition
+// ──────────────────────────────────────────────────────────────────────────────
+
+export interface HandDecomposition {
+  head: number; // tile index (0-33) of the pair
+  mentsu: Array<{
+    type: 'shuntsu' | 'koutsu';
+    tiles: number[]; // tile indices
+    isClosed: boolean;
+  }>;
+}
+
+/**
+ * Enumerate all valid decompositions of a complete hand into 1 pair + N mentsu.
+ * @param counts  34-length tile count array (closed hand tiles only)
+ * @param openMelds  already-called open melds (pre-removed from counts)
+ */
+export function decomposeHand(
+  counts: number[],
+  openMelds?: Array<{ type: string; tiles: number[] }>
+): HandDecomposition[] {
+  const results: HandDecomposition[] = [];
+  const openCount = openMelds ? openMelds.length : 0;
+  const neededMentsu = 4 - openCount;
+
+  // Describe open melds once
+  const openMentsuDescs: HandDecomposition['mentsu'] = openMelds
+    ? openMelds.map(m => ({
+        type: (m.type === 'chi' ? 'shuntsu' : 'koutsu') as 'shuntsu' | 'koutsu',
+        tiles: m.tiles.slice(),
+        isClosed: false,
+      }))
+    : [];
+
+  const c = counts.slice(); // mutable working copy
+  const stack: HandDecomposition['mentsu'][number][] = [];
+
+  function dfs(i: number): void {
+    // Advance to first non-empty tile
+    while (i < 34 && c[i] === 0) i++;
+
+    if (i === 34) {
+      // All closed tiles consumed → valid decomposition
+      results.push({ head: currentHead, mentsu: [...stack, ...openMentsuDescs] });
+      return;
+    }
+
+    if (stack.length >= neededMentsu) return; // tiles remain but no slots left
+
+    const isHonorTile = i >= 27;
+    const posInSuit = i % 9;
+
+    // Try koutsu (triplet)
+    if (c[i] >= 3) {
+      c[i] -= 3;
+      stack.push({ type: 'koutsu', tiles: [i, i, i], isClosed: true });
+      dfs(i);
+      stack.pop();
+      c[i] += 3;
+    }
+
+    // Try shuntsu (sequence) — suited tiles only, no suit wrap
+    if (!isHonorTile && posInSuit <= 6 && c[i + 1] > 0 && c[i + 2] > 0) {
+      c[i]--; c[i + 1]--; c[i + 2]--;
+      stack.push({ type: 'shuntsu', tiles: [i, i + 1, i + 2], isClosed: true });
+      dfs(i);
+      stack.pop();
+      c[i]++; c[i + 1]++; c[i + 2]++;
+    }
+    // If neither applies, branch is dead (tile i can't be consumed → not a valid decomposition)
+  }
+
+  let currentHead = -1;
+
+  // Try every possible pair as the head
+  for (let h = 0; h < 34; h++) {
+    if (c[h] < 2) continue;
+    currentHead = h;
+    c[h] -= 2;
+    dfs(0);
+    c[h] += 2;
+  }
+
+  return results;
+}
+
 // Quick estimate of hand potential value
 export function estimateHandValue(
   hand: Tile[],
