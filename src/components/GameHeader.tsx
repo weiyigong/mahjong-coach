@@ -14,7 +14,16 @@ const ROUND_LABELS: Record<string, string> = {
   E1: '東1局', E2: '東2局', E3: '東3局', E4: '東4局',
   S1: '南1局', S2: '南2局', S3: '南3局', S4: '南4局',
 };
-const PLAYER_LABELS = ['自', '南', '西', '北'];
+// Dynamic labels based on seat wind. scores[0] = self, scores[1-3] = opponents in seat order
+const WIND_CYCLE: Wind[] = ['east', 'south', 'west', 'north'];
+function getPlayerLabels(seatWind: Wind): string[] {
+  const seatIdx = WIND_CYCLE.indexOf(seatWind);
+  return [0, 1, 2, 3].map(i => {
+    if (i === 0) return `${WIND_LABELS[seatWind]}(自)`;
+    const windIdx = (seatIdx + i) % 4;
+    return WIND_LABELS[WIND_CYCLE[windIdx]];
+  });
+}
 const SCORE_STEP = 1000;
 
 export const GameHeader: React.FC = () => {
@@ -42,6 +51,7 @@ export const GameHeader: React.FC = () => {
   } = useGameStore();
 
   const placements = computePlacements(scores);
+  const playerLabels = getPlayerLabels(seatWind);
 
   const doraTiles = doraIndicators.map(ind => {
     const { suit, value } = doraFromIndicator(ind);
@@ -90,7 +100,7 @@ export const GameHeader: React.FC = () => {
               padding: '2px 4px',
             }}>
               <span style={{ fontSize: 10, color: i === 0 ? '#a29bfe' : 'rgba(255,255,255,0.4)', fontWeight: 600 }}>
-                {PLAYER_LABELS[i]}
+                {playerLabels[i]}
               </span>
               <button
                 onClick={() => updateScore(i, -SCORE_STEP)}

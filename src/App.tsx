@@ -3,6 +3,8 @@ import { GameHeader } from './components/GameHeader';
 import { HandDisplay } from './components/HandDisplay';
 import { TilePicker } from './components/TilePicker';
 import { OpponentPanel } from './components/OpponentPanel';
+import { TableView } from './components/TableView';
+import { MeldAlert } from './components/MeldAlert';
 import { StrategyPanel } from './components/StrategyPanel';
 import { RecommendationList } from './components/RecommendationList';
 import { ChiPonKanAdvisor } from './components/ChiPonKanAdvisor';
@@ -282,6 +284,12 @@ export const App: React.FC = () => {
                 selectedTileId={selectedTileId}
               />
             </div>
+
+            {/* Meld alert — auto-detects if you can chi/pon/kan the last discard */}
+            <MeldAlert />
+
+            {/* Table view — spatial opponent layout with quick target switching */}
+            <TableView />
 
             {/* Tile picker — placed before recommendations so it stays accessible during tile entry */}
             <TilePicker />
